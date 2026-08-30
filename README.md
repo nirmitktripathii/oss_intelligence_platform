@@ -63,19 +63,19 @@ Financial traders rely on Bloomberg Terminals to transform raw market noise into
 ```mermaid
 flowchart LR
     subgraph Financial_Market["Traditional Financial Terminal"]
-        M1[Live Stock & Forex Ticker]
-        M2[P/E Ratios & Valuation Multiples]
-        M3[Analyst Equity Research Reports]
-        M4[Order Book Bid/Ask Depth]
-        M5[High-Frequency Price Alerts]
+        M1["Live Stock & Forex Ticker"]
+        M2["P/E Ratios & Valuation Multiples"]
+        M3["Analyst Equity Research Reports"]
+        M4["Order Book Bid/Ask Depth"]
+        M5["High-Frequency Price Alerts"]
     end
 
     subgraph GitScout_Terminal["GitScout OSS Terminal"]
-        G1[Real-Time Live Issue & Bounty Stream]
-        G2[Effort-to-Bounty Hourly ROI ($/hr)]
-        G3[AI AST Localization & Fix Blueprints]
-        G4[Active Contributor & PR Competition Tracker]
-        G5[Multi-Channel Sub-Second Push Alerts]
+        G1["Real-Time Live Issue & Bounty Stream"]
+        G2["Effort-to-Bounty Hourly ROI ($/hr)"]
+        G3["AI AST Localization & Fix Blueprints"]
+        G4["Active Contributor & PR Competition Tracker"]
+        G5["Multi-Channel Sub-Second Push Alerts"]
     end
 
     M1 -.->|Mapped to| G1
@@ -102,42 +102,42 @@ GitScout is built on a clean, decoupled asynchronous microservices architecture 
 ```mermaid
 flowchart TD
     subgraph Ingestion["Ingestion & Scraping Engine"]
-        GH[GitHub REST & GraphQL API] -->|ETag Polling / 36 Repos| SCRAPER[Live Scraper Orchestrator]
-        BOUNTY[Polar.sh / Algora / GitHub Sponsors] -->|Regex & Label Extractor| SCRAPER
-        SCRAPER --> DB[(Neon Serverless Postgres / SQLite)]
-        SCRAPER --> CACHE[(Upstash Redis Cache)]
+        GH["GitHub REST & GraphQL API"] -->|ETag Polling / 36 Repos| SCRAPER["Live Scraper Orchestrator"]
+        BOUNTY["Polar.sh / Algora / GitHub Sponsors"] -->|Regex & Label Extractor| SCRAPER
+        SCRAPER --> DB[("Neon Serverless Postgres / SQLite")]
+        SCRAPER --> CACHE[("Upstash Redis Cache")]
     end
 
     subgraph Intelligence["AI Triage & AST Localization"]
-        SCRAPER --> AST[AST File Localizer]
-        SCRAPER --> REPRO[Minimal Repro Generator]
-        SCRAPER --> FIX[CONTRIBUTING.md Fix Planner]
+        SCRAPER --> AST["AST File Localizer"]
+        SCRAPER --> REPRO["Minimal Repro Generator"]
+        SCRAPER --> FIX["CONTRIBUTING.md Fix Planner"]
         AST --> DB
         REPRO --> DB
         FIX --> DB
     end
 
     subgraph Backend["FastAPI Backend Service (Port 8000)"]
-        DB --> API[FastAPI REST API v1]
+        DB --> API["FastAPI REST API v1"]
         CACHE --> API
-        API --> DISPATCH[Multi-Channel Dispatcher]
-        API --> BILLING[Dodo Payments & Lemon Squeezy Engine]
+        API --> DISPATCH["Multi-Channel Dispatcher"]
+        API --> BILLING["Dodo Payments & Lemon Squeezy Engine"]
     end
 
     subgraph Channels["Alert Channels"]
-        DISPATCH -->|Bot API| TG[Telegram]
-        DISPATCH -->|Rich Embeds| DC[Discord]
-        DISPATCH -->|Transactional API| EM[Resend Email]
-        DISPATCH -->|Twilio API| WA[WhatsApp Pro]
+        DISPATCH -->|Bot API| TG["Telegram"]
+        DISPATCH -->|Rich Embeds| DC["Discord"]
+        DISPATCH -->|Transactional API| EM["Resend Email"]
+        DISPATCH -->|Twilio API| WA["WhatsApp Pro"]
     end
 
     subgraph Frontend["Next.js 14 Dashboard (Port 3000)"]
-        API --> SWR[Client-side SWR & URL State]
-        SWR --> THEME[Theme Engine: Dark / Light / System]
-        THEME --> EXPLORER[Faceted Issue Explorer]
-        THEME --> DRAWER[AI Workbench Slide-out Drawer]
-        THEME --> ROI[Hourly ROI Calculator]
-        THEME --> GRAPH[Graphify AST Knowledge Graph]
+        API --> SWR["Client-side SWR & URL State"]
+        SWR --> THEME["Theme Engine: Dark / Light / System"]
+        THEME --> EXPLORER["Faceted Issue Explorer"]
+        THEME --> DRAWER["AI Workbench Slide-out Drawer"]
+        THEME --> ROI["Hourly ROI Calculator"]
+        THEME --> GRAPH["Graphify AST Knowledge Graph"]
     end
 ```
 
