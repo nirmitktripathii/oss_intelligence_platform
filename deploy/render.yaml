@@ -1,0 +1,117 @@
+# Render Infrastructure-as-Code Blueprint
+# GitScout / OSS Terminal: High-Performance Open-Source Issue Intelligence Platform
+# Architecture: FastAPI Web Service (REST API) + Background Scraping Worker
+# Zero-Cost Tier Specification ($0/mo initial operating cost)
+
+services:
+  # 1. FastAPI Core Web Service
+  - type: web
+    name: gitscout-backend
+    env: python
+    region: oregon # us-west / oregon free tier
+    plan: free
+    branch: main
+    rootDir: .
+    buildCommand: "pip install --upgrade pip && pip install -r backend/requirements.txt"
+    startCommand: "python -m uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT --workers 2"
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEBUG
+        value: "false"
+      - key: PROJECT_NAME
+        value: "GitScout / OSS Terminal"
+      - key: VERSION
+        value: "1.0.0"
+      - key: API_V1_STR
+        value: "/api/v1"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard: postgresql+asyncpg://<user>:<password>@<neon_host>.neon.tech/gitscout?sslmode=require
+      - key: CORS_ORIGINS
+        value: "https://gitscout.vercel.app,https://gitscout.dev,http://localhost:3000"
+      - key: RATE_LIMIT_DEFAULT
+        value: "120/minute"
+      - key: GITHUB_TOKEN
+        sync: false # Optional GitHub PAT for 5,000 req/hr rate limit
+      - key: GITHUB_API_BASE
+        value: "https://api.github.com"
+      - key: SCRAPE_INTERVAL_MINUTES
+        value: "30"
+      - key: DEFAULT_REPO_LIMIT
+        value: "20"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: DISCORD_WEBHOOK_URL
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
+        value: "alerts@gitscout.dev"
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: DODO_PAYMENTS_API_KEY
+        sync: false
+      - key: DODO_PAYMENTS_WEBHOOK_KEY
+        sync: false
+      - key: DODO_ENVIRONMENT
+        value: "test_mode"
+      - key: LEMON_SQUEEZY_API_KEY
+        sync: false
+      - key: LEMON_SQUEEZY_STORE_ID
+        sync: false
+      - key: LEMON_SQUEEZY_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        value: "https://gitscout.vercel.app"
+
+  # 2. Background Scraper & AST Triage Worker
+  - type: worker
+    name: gitscout-scraper-worker
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: .
+    buildCommand: "pip install --upgrade pip && pip install -r backend/requirements.txt"
+    startCommand: "python -m app.scrapers.orchestrator --seed-live --limit-per-repo 5"
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DATABASE_URL
+        fromService:
+          type: web
+          name: gitscout-backend
+          envVarKey: DATABASE_URL
+      - key: GITHUB_TOKEN
+        fromService:
+          type: web
+          name: gitscout-backend
+          envVarKey: GITHUB_TOKEN
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          type: web
+          name: gitscout-backend
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: DISCORD_WEBHOOK_URL
+        fromService:
+          type: web
+          name: gitscout-backend
+          envVarKey: DISCORD_WEBHOOK_URL
+      - key: RESEND_API_KEY
+        fromService:
+          type: web
+          name: gitscout-backend
+          envVarKey: RESEND_API_KEY

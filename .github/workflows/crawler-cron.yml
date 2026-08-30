@@ -1,0 +1,40 @@
+name: Scheduled Live Issue & Bounty Crawler
+
+on:
+  schedule:
+    # Run every 3 hours at minute 0 (0 */3 * * *)
+    - cron: "0 */3 * * *"
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  crawl-and-index:
+    name: Harvest Live Issues, Bounties & Prune Closed
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Live Crawler & Auto-Pruning Engine
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python -m app.scrapers.orchestrator --limit-per-repo 8
+          python -m app.scrapers.orchestrator --prune-closed

@@ -1,0 +1,107 @@
+"""AI Triage, AST File Localization & Reproduction endpoints."""
+
+from datetime import datetime, timezone
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
+from app.models.issue import Issue
+from app.models.triage import TriageReport
+from app.schemas.triage import TriageResponse
+from app.triage.ast_localizer import ASTLocalizer
+from app.triage.fix_planner import FixPlanner
+from app.triage.repro_generator import ReproGenerator
+
+router = APIRouter(tags=["Triage & Diagnostics"])
+
+
+class OnDemandTriageRequest(BaseModel):
+    repo_owner: str = Field(..., example="fastapi")
+    repo_name: str = Field(..., example="fastapi")
+    issue_number: int = Field(1, example=101)
+    title: str = Field(..., example="TypeError when parsing nested JSON body with None values")
+    body: Optional[str] = Field("", example="Traceback (most recent call last):\n  File \"fastapi/routing.py\", line 150, in get_request_handler\n    result = parse_body(body)")
+    primary_language: str = Field("Python", example="Python")
+
+
+@router.get("/triage/{issue_id:path}", response_model=TriageResponse, summary="Get Issue AI Triage & Localization")
+async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
+    """
+    Retrieve AI triage report, localized files, reproduction script, and fix plan for an issue.
+    If triage has not been generated yet, automatically generates and persists it.
+    """
+    stmt = select(TriageReport).where(TriageReport.issue_id == issue_id)
+    result = await db.execute(stmt)
+    triage = result.scalar_one_or_none()
+
+    if triage:
+        return TriageResponse.model_validate(triage.to_dict())
+
+    # Fallback: check if issue exists to generate triage dynamically
+    issue_stmt = select(Issue).where(Issue.id == issue_id)
+    issue_res = await db.execute(issue_stmt)
+    issue = issue_res.scalar_one_or_none()
+
+    if not issue:
+        raise HTTPException(status_code=404, detail=f"Triage report or issue '{issue_id}' not found.")
+
+    # Generate triage dynamically
+    localized_files, root_cause = ASTLocalizer.localize(
+        issue.repo_owner, issue.repo_name, issue.title, issue.body
+    )
+    repro_code, repro_lang, repro_inst = ReproGenerator.generate(
+        issue.repo_owner, issue.repo_name, issue.title, issue.body
+    )
+    fix_steps, contrib_summary = FixPlanner.generate_plan(
+        issue.repo_owner, issue.repo_name, issue.issue_number, issue.title, localized_files
+    )
+
+    triage_obj = TriageReport(
+        issue_id=issue.id,
+        summary=f"Automated AI Triage for #{issue.issue_number} in {issue.repo_owner}/{issue.repo_name}: {issue.title}",
+        root_cause_analysis=root_cause,
+        localized_files=[f.model_dump() for f in localized_files],
+        reproduction_code=repro_code,
+        reproduction_lang=repro_lang,
+        reproduction_instructions=repro_inst,
+        fix_plan_steps=[s.model_dump() for s in fix_steps],
+        contributing_guidelines_summary=contrib_summary,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+    db.add(triage_obj)
+    await db.commit()
+    await db.refresh(triage_obj)
+
+    return TriageResponse.model_validate(triage_obj.to_dict())
+
+
+@router.post("/triage/generate", response_model=TriageResponse, summary="On-Demand AI Triage Generation")
+async def generate_on_demand_triage(req: OnDemandTriageRequest):
+    """
+    Generate an AST localization, minimal reproduction snippet, and step-by-step fix blueprint for arbitrary issue text.
+    """
+    localized_files, root_cause = ASTLocalizer.localize(
+        req.repo_owner, req.repo_name, req.title, req.body
+    )
+    repro_code, repro_lang, repro_inst = ReproGenerator.generate(
+        req.repo_owner, req.repo_name, req.title, req.body, req.primary_language
+    )
+    fix_steps, contrib_summary = FixPlanner.generate_plan(
+        req.repo_owner, req.repo_name, req.issue_number, req.title, localized_files
+    )
+
+    return TriageResponse(
+        issue_id=f"{req.repo_owner}/{req.repo_name}#{req.issue_number}",
+        summary=f"On-demand AI Triage for {req.repo_owner}/{req.repo_name}: {req.title}",
+        root_cause_analysis=root_cause,
+        localized_files=localized_files,
+        reproduction_code=repro_code,
+        reproduction_lang=repro_lang,
+        reproduction_instructions=repro_inst,
+        fix_plan_steps=fix_steps,
+        contributing_guidelines_summary=contrib_summary,
+        created_at=datetime.now(timezone.utc),
+    )

@@ -1,0 +1,46 @@
+# Environments & Python
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local Database & Secrets
+*.db
+*.sqlite
+*.sqlite3
+gitscout.db
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Frontend & Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+node_modules/
+.next/
+dist/
+build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE & OS Files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

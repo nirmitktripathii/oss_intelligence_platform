@@ -1,0 +1,1950 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitScout AST Knowledge Graph | Graphify Interactive Visualizer</title>
+  <!-- D3.js CDN -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            },
+            dark: {
+              950: '#090d16',
+              900: '#0f172a',
+              850: '#141e33',
+              800: '#1e293b',
+              700: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
+    
+    * {
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+    }
+    
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Canvas glow */
+    .node-god {
+      animation: pulse-ring 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    
+    @keyframes pulse-ring {
+      0%, 100% {
+        filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.9));
+      }
+      50% {
+        filter: drop-shadow(0 0 16px rgba(168, 85, 247, 1));
+      }
+    }
+
+    /* Blast radius glow */
+    .node-highlighted {
+      filter: drop-shadow(0 0 12px #38bdf8);
+      stroke: #38bdf8 !important;
+      stroke-width: 3.5px !important;
+    }
+
+    .edge-highlighted {
+      stroke: #38bdf8 !important;
+      stroke-width: 3px !important;
+      stroke-opacity: 1 !important;
+    }
+
+    .edge-dimmed, .node-dimmed {
+      opacity: 0.12 !important;
+    }
+
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      transition: opacity 0.15s ease-in-out;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body class="bg-dark-950 text-slate-100 h-screen w-screen overflow-hidden flex flex-col select-none">
+
+  <!-- Top Navigation Header -->
+  <header class="h-14 bg-dark-900 border-b border-dark-700/60 px-4 flex items-center justify-between shrink-0 z-30 shadow-lg">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-600/30 border border-indigo-500/50 text-indigo-400 font-bold">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold tracking-tight text-white flex items-center gap-1.5">
+            GitScout <span class="text-xs px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono border border-indigo-500/30">AST Graphify</span>
+          </span>
+          <span class="text-xs text-slate-400 hidden sm:inline">• Knowledge Graph & Blast Radius Navigator</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Stats Telemetry -->
+    <div class="hidden lg:flex items-center gap-4 text-xs font-mono bg-dark-850 px-3 py-1.5 rounded-md border border-dark-700/50">
+      <div class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="text-slate-400">Nodes:</span>
+        <span class="text-emerald-400 font-semibold" id="stat-nodes">78</span>
+      </div>
+      <span class="text-dark-700">|</span>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Edges:</span>
+        <span class="text-cyan-400 font-semibold" id="stat-edges">142</span>
+      </div>
+      <span class="text-dark-700">|</span>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Clusters:</span>
+        <span class="text-purple-400 font-semibold" id="stat-clusters">6</span>
+      </div>
+      <span class="text-dark-700">|</span>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">God Nodes:</span>
+        <span class="text-amber-400 font-semibold" id="stat-gods">11</span>
+      </div>
+      <span class="text-dark-700">|</span>
+      <div class="flex items-center gap-1.5">
+        <span class="text-slate-400">Modularity:</span>
+        <span class="text-indigo-400 font-semibold">0.742</span>
+      </div>
+    </div>
+
+    <!-- Right Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Search Input -->
+      <div class="relative w-48 sm:w-64">
+        <input 
+          id="search-input" 
+          type="text" 
+          placeholder="Search AST symbol or file..." 
+          class="w-full bg-dark-800 border border-dark-700 focus:border-indigo-500 rounded-md pl-8 pr-3 py-1 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono transition"
+        />
+        <svg class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 1114 0z"></path>
+        </svg>
+      </div>
+
+      <button id="btn-reheat" title="Reheat Simulation Physics" class="p-1.5 bg-dark-800 hover:bg-dark-700 border border-dark-700 rounded text-slate-300 hover:text-white transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+        </svg>
+      </button>
+
+      <button id="btn-reset-zoom" title="Reset Viewport / Fit Screen" class="p-1.5 bg-dark-800 hover:bg-dark-700 border border-dark-700 rounded text-slate-300 hover:text-white transition">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+        </svg>
+      </button>
+
+      <button id="btn-export-json" title="Export Graph JSON" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 rounded text-xs font-medium text-white transition flex items-center gap-1">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+        </svg>
+        <span class="hidden sm:inline">Export</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Graph Workspace Layout -->
+  <div class="flex-1 flex overflow-hidden relative">
+    
+    <!-- Left Filter & Community Sidebar -->
+    <aside class="w-64 bg-dark-900/95 backdrop-blur border-r border-dark-700/60 flex flex-col shrink-0 z-20 overflow-y-auto">
+      
+      <!-- Subsystems / Community Clusters -->
+      <div class="p-4 border-b border-dark-700/50">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+          <span>Architectural Subsystems</span>
+          <span class="text-[10px] text-indigo-400 font-mono">6 Clusters</span>
+        </h3>
+        <div class="space-y-1.5" id="community-legend">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Node Type Filters -->
+      <div class="p-4 border-b border-dark-700/50">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+          <span>AST Node Types</span>
+          <button id="btn-toggle-all-types" class="text-[10px] text-indigo-400 hover:underline">Toggle All</button>
+        </h3>
+        <div class="space-y-1 text-xs" id="type-filters">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Blast Radius Settings -->
+      <div class="p-4 border-b border-dark-700/50">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+          <span>Blast Radius Depth</span>
+          <span class="font-mono text-indigo-400 text-xs" id="blast-depth-label">2 Hops</span>
+        </h3>
+        <input 
+          id="blast-slider" 
+          type="range" 
+          min="1" 
+          max="3" 
+          value="2" 
+          class="w-full h-1.5 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+        />
+        <div class="flex justify-between text-[10px] text-slate-500 font-mono mt-1">
+          <span>1-Hop (Direct)</span>
+          <span>2-Hop (Transitive)</span>
+          <span>3-Hop (Global)</span>
+        </div>
+      </div>
+
+      <!-- Graph Legend & Edge Types -->
+      <div class="p-4 flex-1">
+        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2.5">Relation Grammar</h3>
+        <div class="space-y-1.5 text-xs text-slate-400 font-mono">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-indigo-400 inline-block"></span>
+            <span>imports / calls</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-emerald-400 inline-block"></span>
+            <span>inherits / extends</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-purple-400 inline-block"></span>
+            <span>validates (schema)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-cyan-400 inline-block"></span>
+            <span>routes_to (endpoints)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-amber-400 inline-block"></span>
+            <span>dispatches_to (alerts)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-0.5 bg-rose-400 inline-block"></span>
+            <span>affects (ORM/DB)</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Graph Canvas Center Stage -->
+    <main class="flex-1 h-full w-full relative bg-dark-950" id="graph-container">
+      <svg id="graph-svg" class="w-full h-full cursor-grab active:cursor-grabbing"></svg>
+
+      <!-- Zoom Floating Controls -->
+      <div class="absolute bottom-6 left-6 flex flex-col gap-1.5 z-20 bg-dark-900/80 backdrop-blur border border-dark-700/60 rounded-lg p-1 shadow-xl">
+        <button id="btn-zoom-in" title="Zoom In" class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-dark-800 rounded transition font-bold text-lg">+</button>
+        <button id="btn-zoom-out" title="Zoom Out" class="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-dark-800 rounded transition font-bold text-lg">-</button>
+        <button id="btn-toggle-gods" title="Toggle God Node Highlight" class="w-8 h-8 flex items-center justify-center text-amber-400 hover:bg-dark-800 rounded transition text-xs font-mono font-bold">★</button>
+      </div>
+
+      <!-- Quick Hint Banner -->
+      <div class="absolute top-4 left-4 pointer-events-none z-10 text-[11px] font-mono text-slate-500 bg-dark-900/60 px-2.5 py-1 rounded border border-dark-800/80 backdrop-blur">
+        💡 Click node to inspect AST Blast Radius • Drag to reposition • Scroll to zoom
+      </div>
+
+      <!-- Tooltip -->
+      <div id="tooltip" class="tooltip hidden bg-dark-900 border border-dark-700 shadow-2xl rounded-lg p-3 max-w-xs text-xs">
+        <div class="font-bold text-white mb-1 flex items-center gap-1.5" id="tt-title"></div>
+        <div class="text-[11px] text-slate-400 font-mono mb-2" id="tt-type"></div>
+        <div class="text-slate-300 text-xs mb-2 leading-relaxed" id="tt-desc"></div>
+        <div class="text-[10px] text-indigo-400 font-mono pt-1.5 border-t border-dark-800 flex justify-between" id="tt-meta"></div>
+      </div>
+    </main>
+
+    <!-- Right AST Inspector Drawer -->
+    <aside id="inspector-drawer" class="w-80 lg:w-96 bg-dark-900/95 backdrop-blur border-l border-dark-700/60 flex flex-col shrink-0 z-20 transition-all duration-300 translate-x-full absolute right-0 top-0 bottom-0 shadow-2xl">
+      <div class="p-4 border-b border-dark-700/60 flex items-center justify-between bg-dark-850">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-indigo-500" id="insp-cluster-dot"></span>
+          <h2 class="font-bold text-sm text-white tracking-tight">AST Node Inspector</h2>
+        </div>
+        <button id="btn-close-inspector" class="text-slate-400 hover:text-white p-1 rounded hover:bg-dark-700 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs" id="inspector-content">
+        <!-- Populated on Node Click -->
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- Embedded Knowledge Graph Data -->
+  <script>
+    // Embedded graph data fallback for standalone zero-dependency execution
+    const GRAPH_DATA = {
+  "directed": true,
+  "multigraph": false,
+  "graph": {
+    "name": "GitScout / OSS Terminal Knowledge Graph",
+    "version": "1.0.0",
+    "total_nodes": 78,
+    "total_edges": 142,
+    "modularity_score": 0.742,
+    "density": 0.0236,
+    "diameter": 6,
+    "average_degree": 3.64,
+    "generated_at": "2026-08-29T11:54:00Z"
+  },
+  "nodes": [
+    {
+      "id": "backend/app/main.py",
+      "label": "app.main",
+      "type": "module",
+      "file": "backend/app/main.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 14,
+      "is_god_node": true,
+      "description": "FastAPI main application entrypoint, lifespan manager, middleware stack, CORS configuration, and root routing."
+    },
+    {
+      "id": "backend/app/main.py:create_app",
+      "label": "create_app()",
+      "type": "function",
+      "file": "backend/app/main.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "FastAPI application factory configuring routers, exception handlers, and security middleware."
+    },
+    {
+      "id": "backend/app/main.py:lifespan",
+      "label": "lifespan()",
+      "type": "function",
+      "file": "backend/app/main.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Asynchronous application lifecycle context initializing database schema and closing connection pool on shutdown."
+    },
+    {
+      "id": "backend/app/config.py:Settings",
+      "label": "Settings",
+      "type": "class",
+      "file": "backend/app/config.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 11,
+      "is_god_node": true,
+      "description": "Pydantic BaseSettings managing environment variables, API keys, database URLs, and channel credentials."
+    },
+    {
+      "id": "backend/app/database.py:Base",
+      "label": "Base",
+      "type": "class",
+      "file": "backend/app/database.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "SQLAlchemy DeclarativeBase metadata registry for ORM persistence."
+    },
+    {
+      "id": "backend/app/database.py:get_db",
+      "label": "get_db()",
+      "type": "function",
+      "file": "backend/app/database.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 8,
+      "description": "Async generator dependency yielding scoped AsyncSession with automatic commit/rollback."
+    },
+    {
+      "id": "backend/app/database.py:init_db",
+      "label": "init_db()",
+      "type": "function",
+      "file": "backend/app/database.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Asynchronously creates tables and verifies connection pooling."
+    },
+    {
+      "id": "backend/app/security/headers.py:SecurityHeadersMiddleware",
+      "label": "SecurityHeadersMiddleware",
+      "type": "class",
+      "file": "backend/app/security/headers.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Starlette middleware enforcing CSP, HSTS, X-Frame-Options: DENY, and X-Content-Type-Options: nosniff."
+    },
+    {
+      "id": "backend/app/security/rate_limiter.py:limiter",
+      "label": "limiter",
+      "type": "function",
+      "file": "backend/app/security/rate_limiter.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "SlowAPI rate limiter instance tracking remote IP client quotas (default 60 req/min)."
+    },
+    {
+      "id": "backend/app/models/issue.py:Issue",
+      "label": "Issue (ORM)",
+      "type": "class",
+      "file": "backend/app/models/issue.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 16,
+      "is_god_node": true,
+      "description": "Primary SQLAlchemy ORM entity storing verified live open issues, bounties, tech stack tags, and ROI."
+    },
+    {
+      "id": "backend/app/schemas/issue.py:IssueResponse",
+      "label": "IssueResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/issue.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 12,
+      "is_god_node": true,
+      "description": "Pydantic v2 data contract representing serialized issues returned to frontend and clients."
+    },
+    {
+      "id": "backend/app/schemas/issue.py:PaginatedIssuesResponse",
+      "label": "PaginatedIssuesResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/issue.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Pydantic schema wrapping issue arrays with total count, current page, and page_size metadata."
+    },
+    {
+      "id": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator",
+      "label": "ScraperOrchestrator",
+      "type": "class",
+      "file": "backend/app/scrapers/orchestrator.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 13,
+      "is_god_node": true,
+      "description": "Master ingestion orchestrator coordinating live scraping, validation filtering, bounty extraction, and AI triage generation."
+    },
+    {
+      "id": "backend/app/scrapers/github_client.py:GitHubClient",
+      "label": "GitHubClient",
+      "type": "class",
+      "file": "backend/app/scrapers/github_client.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "High-throughput asynchronous GitHub REST and Search API client featuring ETag caching and rate limit handling."
+    },
+    {
+      "id": "backend/app/scrapers/domain_registry.py:DOMAIN_REGISTRY",
+      "label": "DOMAIN_REGISTRY",
+      "type": "function",
+      "file": "backend/app/scrapers/domain_registry.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Curated catalog of 36 high-velocity repositories partitioned across 6 engineering domains."
+    },
+    {
+      "id": "backend/app/scrapers/bounty_extractor.py:BountyExtractor",
+      "label": "BountyExtractor",
+      "type": "class",
+      "file": "backend/app/scrapers/bounty_extractor.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Multi-pattern regex and label parser extracting USD bounty amounts, platforms (Polar, Algora, Sponsors), and claim URLs."
+    },
+    {
+      "id": "backend/app/scrapers/classifier.py:IssueClassifier",
+      "label": "IssueClassifier",
+      "type": "class",
+      "file": "backend/app/scrapers/classifier.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 8,
+      "description": "Heuristic classifier calculating tech stack tags, difficulty tier (Easy/Medium/Hard), time-to-solve, and hourly ROI ($/hr)."
+    },
+    {
+      "id": "backend/app/api/v1/router.py:api_router",
+      "label": "api_router",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/router.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 8,
+      "description": "FastAPI root router aggregating /health, /issues, /triage, /bounties, /notifications, and /billing routes."
+    },
+    {
+      "id": "backend/app/api/v1/health.py:GET /health",
+      "label": "GET /health",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/health.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Telemetry endpoint validating database pool health, open issues count, and version."
+    },
+    {
+      "id": "backend/app/api/v1/issues.py:GET /issues",
+      "label": "GET /issues",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/issues.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Faceted search endpoint supporting domain, difficulty, tech stack, bounty threshold, keyword queries, and sorting."
+    },
+    {
+      "id": "backend/app/api/v1/issues.py:GET /issues/{id}",
+      "label": "GET /issues/{id}",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/issues.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Single issue retrieval endpoint using natural composite key owner/repo#number."
+    },
+    {
+      "id": "backend/app/api/v1/bounties.py:GET /bounties",
+      "label": "GET /bounties",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/bounties.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Funded bounties leaderboard endpoint sorting issues by Hourly ROI ($/hr) and total cash prize."
+    },
+    {
+      "id": "backend/app/schemas/bounty.py:BountyResponse",
+      "label": "BountyResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/bounty.py",
+      "community_id": 0,
+      "community_name": "Backend Core & Ingestion",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Pydantic contract returning bounty amounts, payout sources, and hourly returns."
+    },
+    {
+      "id": "backend/app/triage/ast_localizer.py:ASTLocalizer",
+      "label": "ASTLocalizer",
+      "type": "class",
+      "file": "backend/app/triage/ast_localizer.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 11,
+      "is_god_node": true,
+      "description": "Multi-language AST analyzer extracting Python AST symbols, stack trace frames, candidate files, and confidence rankings."
+    },
+    {
+      "id": "backend/app/triage/ast_localizer.py:extract_stack_traces",
+      "label": "extract_stack_traces()",
+      "type": "function",
+      "file": "backend/app/triage/ast_localizer.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Regex frame parser for Python tracebacks, JavaScript errors, Go panics, Rust errors, and C++ compiler traces."
+    },
+    {
+      "id": "backend/app/triage/ast_localizer.py:extract_ast_symbols_python",
+      "label": "extract_ast_symbols_python()",
+      "type": "function",
+      "file": "backend/app/triage/ast_localizer.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Python ast module parser extracting ClassDef, FunctionDef, AsyncFunctionDef, and Import AST nodes."
+    },
+    {
+      "id": "backend/app/triage/repro_generator.py:ReproGenerator",
+      "label": "ReproGenerator",
+      "type": "class",
+      "file": "backend/app/triage/repro_generator.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Generator constructing runnable, standalone reproduction test cases wrapped in error handling harnesses."
+    },
+    {
+      "id": "backend/app/triage/fix_planner.py:FixPlanner",
+      "label": "FixPlanner",
+      "type": "class",
+      "file": "backend/app/triage/fix_planner.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Planner assembling 4-step CONTRIBUTING.md-compliant PR blueprints: Branching, Code Patch, Test Verification, Commit."
+    },
+    {
+      "id": "backend/app/models/triage.py:TriageReport",
+      "label": "TriageReport (ORM)",
+      "type": "class",
+      "file": "backend/app/models/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "SQLAlchemy ORM model storing root cause analyses, localized file candidates, repro snippets, and fix checklists."
+    },
+    {
+      "id": "backend/app/schemas/triage.py:LocalizedFile",
+      "label": "LocalizedFile",
+      "type": "schema",
+      "file": "backend/app/schemas/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Pydantic contract holding target file path, line range window, confidence score, and localization rationale."
+    },
+    {
+      "id": "backend/app/schemas/triage.py:FixPlanStep",
+      "label": "FixPlanStep",
+      "type": "schema",
+      "file": "backend/app/schemas/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Pydantic schema representing individual contribution step, code snippet, and terminal command."
+    },
+    {
+      "id": "backend/app/schemas/triage.py:TriageResponse",
+      "label": "TriageResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Comprehensive triage payload delivered to AI Workbench Slide-out Drawer."
+    },
+    {
+      "id": "backend/app/api/v1/triage.py:GET /triage/{id}",
+      "label": "GET /triage/{id}",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Endpoint fetching persisted triage report or dynamically generating AST localization on cache miss."
+    },
+    {
+      "id": "backend/app/api/v1/triage.py:POST /triage/generate",
+      "label": "POST /triage/generate",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/triage.py",
+      "community_id": 1,
+      "community_name": "AI Triage & AST Engine",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "On-demand triage endpoint generating AST diagnostics for arbitrary pasted bug report text."
+    },
+    {
+      "id": "backend/app/dispatcher/base.py:BaseNotifier",
+      "label": "BaseNotifier",
+      "type": "class",
+      "file": "backend/app/dispatcher/base.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Abstract base class defining asynchronous send_alert() and send_test_message() interface."
+    },
+    {
+      "id": "backend/app/dispatcher/base.py:AlertPayload",
+      "label": "AlertPayload",
+      "type": "schema",
+      "file": "backend/app/dispatcher/base.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 9,
+      "is_god_node": true,
+      "description": "Normalized data transfer model containing repo, domain, bounty USD, hourly ROI, and AST target file."
+    },
+    {
+      "id": "backend/app/dispatcher/router.py:NotificationRouter",
+      "label": "NotificationRouter",
+      "type": "class",
+      "file": "backend/app/dispatcher/router.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 12,
+      "is_god_node": true,
+      "description": "Central event bus matching newly indexed issues against subscriber filter criteria and broadcasting push alerts."
+    },
+    {
+      "id": "backend/app/dispatcher/telegram.py:TelegramNotifier",
+      "label": "TelegramNotifier",
+      "type": "class",
+      "file": "backend/app/dispatcher/telegram.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Telegram Bot API adapter sending HTML alerts with inline keyboard links to GitHub and Workbench."
+    },
+    {
+      "id": "backend/app/dispatcher/discord.py:DiscordNotifier",
+      "label": "DiscordNotifier",
+      "type": "class",
+      "file": "backend/app/dispatcher/discord.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Discord Webhook adapter building rich color-coded embeds with domain badges and bounty metrics."
+    },
+    {
+      "id": "backend/app/dispatcher/email.py:EmailNotifier",
+      "label": "EmailNotifier",
+      "type": "class",
+      "file": "backend/app/dispatcher/email.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Transactional email adapter via Resend REST API with aiosmtplib SMTP fallback."
+    },
+    {
+      "id": "backend/app/dispatcher/whatsapp.py:WhatsAppNotifier",
+      "label": "WhatsAppNotifier",
+      "type": "class",
+      "file": "backend/app/dispatcher/whatsapp.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Twilio WhatsApp Pro adapter dispatching high-priority SMS/WhatsApp alerts for high-bounty issues."
+    },
+    {
+      "id": "backend/app/models/subscription.py:NotificationSubscription",
+      "label": "NotificationSubscription (ORM)",
+      "type": "class",
+      "file": "backend/app/models/subscription.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "SQLAlchemy ORM model storing channel destination, domain filter arrays, min_bounty thresholds, and active status."
+    },
+    {
+      "id": "backend/app/schemas/notification.py:SubscriptionCreate",
+      "label": "SubscriptionCreate",
+      "type": "schema",
+      "file": "backend/app/schemas/notification.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Pydantic contract validating alert destination format and criteria."
+    },
+    {
+      "id": "backend/app/schemas/notification.py:SubscriptionResponse",
+      "label": "SubscriptionResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/notification.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Serialized subscription model returned after channel pairing."
+    },
+    {
+      "id": "backend/app/api/v1/notifications.py:POST /subscribe",
+      "label": "POST /notifications/subscribe",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/notifications.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Alert registration endpoint storing Telegram chat IDs, Discord webhooks, or email filters."
+    },
+    {
+      "id": "backend/app/api/v1/notifications.py:POST /test",
+      "label": "POST /notifications/test",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/notifications.py",
+      "community_id": 2,
+      "community_name": "Multi-Channel Dispatch",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Instant verification dispatch sending a test notification ping to confirm bot permissions."
+    },
+    {
+      "id": "backend/app/billing/dodo.py:DodoPaymentsClient",
+      "label": "DodoPaymentsClient",
+      "type": "class",
+      "file": "backend/app/billing/dodo.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Async API client creating hosted checkout sessions and managing AI usage metering in Dodo Payments."
+    },
+    {
+      "id": "backend/app/billing/lemonsqueezy.py:LemonSqueezyClient",
+      "label": "LemonSqueezyClient",
+      "type": "class",
+      "file": "backend/app/billing/lemonsqueezy.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Async client generating Lemon Squeezy Merchant of Record checkout URLs."
+    },
+    {
+      "id": "backend/app/billing/webhook_handler.py:WebhookProcessor",
+      "label": "WebhookProcessor",
+      "type": "class",
+      "file": "backend/app/billing/webhook_handler.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Processes payment.succeeded, subscription.created, and cancellation events to update customer tier."
+    },
+    {
+      "id": "backend/app/billing/webhook_handler.py:verify_dodo_signature",
+      "label": "verify_dodo_signature()",
+      "type": "function",
+      "file": "backend/app/billing/webhook_handler.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "HMAC SHA256 constant-time signature validator for Dodo Payments webhooks."
+    },
+    {
+      "id": "backend/app/billing/webhook_handler.py:verify_lemonsqueezy_signature",
+      "label": "verify_lemonsqueezy_signature()",
+      "type": "function",
+      "file": "backend/app/billing/webhook_handler.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "HMAC SHA256 signature validator for Lemon Squeezy (X-Signature)."
+    },
+    {
+      "id": "backend/app/models/billing.py:BillingSubscription",
+      "label": "BillingSubscription (ORM)",
+      "type": "class",
+      "file": "backend/app/models/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "SQLAlchemy ORM model storing customer email, active plan ID (pro_monthly, team_yearly), and provider status."
+    },
+    {
+      "id": "backend/app/models/billing.py:CheckoutSession",
+      "label": "CheckoutSession (ORM)",
+      "type": "class",
+      "file": "backend/app/models/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Audit record tracking generated checkout URLs, session IDs, and completion timestamps."
+    },
+    {
+      "id": "backend/app/schemas/billing.py:CheckoutRequest",
+      "label": "CheckoutRequest",
+      "type": "schema",
+      "file": "backend/app/schemas/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Pydantic contract validating checkout plan_id, customer_email, and payment provider choice."
+    },
+    {
+      "id": "backend/app/schemas/billing.py:SubscriptionStatusResponse",
+      "label": "SubscriptionStatusResponse",
+      "type": "schema",
+      "file": "backend/app/schemas/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Pydantic contract returning is_pro entitlement status and renewal timestamp."
+    },
+    {
+      "id": "backend/app/api/v1/billing.py:POST /checkout",
+      "label": "POST /billing/checkout",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Checkout initiation endpoint creating payment sessions in Dodo Payments or Lemon Squeezy."
+    },
+    {
+      "id": "backend/app/api/v1/billing.py:GET /status",
+      "label": "GET /billing/status",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Subscription verification endpoint unlocking Pro features for paying developer emails."
+    },
+    {
+      "id": "backend/app/api/v1/billing.py:POST /webhooks/dodo",
+      "label": "POST /billing/webhooks/dodo",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Secure webhook handler receiving real-time payment confirmations from Dodo Payments."
+    },
+    {
+      "id": "backend/app/api/v1/billing.py:POST /webhooks/lemonsqueezy",
+      "label": "POST /billing/webhooks/lemonsqueezy",
+      "type": "endpoint",
+      "file": "backend/app/api/v1/billing.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Secure webhook endpoint receiving order events from Lemon Squeezy."
+    },
+    {
+      "id": "backend/app/billing/webhook_handler.py:WebhookProcessor",
+      "label": "WebhookProcessor",
+      "type": "class",
+      "file": "backend/app/billing/webhook_handler.py",
+      "community_id": 3,
+      "community_name": "Monetization & Webhooks",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Processor persisting subscription updates from verified payment webhooks."
+    },
+    {
+      "id": "frontend/src/app/layout.tsx",
+      "label": "RootLayout",
+      "type": "file",
+      "file": "frontend/src/app/layout.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 8,
+      "description": "Next.js 14 Root Layout with ThemeProvider (Dark, Light, System), font loading, and meta headers."
+    },
+    {
+      "id": "frontend/src/app/page.tsx",
+      "label": "TerminalHome",
+      "type": "file",
+      "file": "frontend/src/app/page.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 9,
+      "is_god_node": true,
+      "description": "Main GitScout Dashboard page hosting the live issue stream, faceted search, and workbench drawer."
+    },
+    {
+      "id": "frontend/src/components/explorer/issue-explorer.tsx",
+      "label": "IssueExplorer",
+      "type": "class",
+      "file": "frontend/src/components/explorer/issue-explorer.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 14,
+      "is_god_node": true,
+      "description": "High-density faceted terminal explorer supporting keyboard navigation, domain pills, difficulty tags, and live search."
+    },
+    {
+      "id": "frontend/src/components/drawer/workbench-drawer.tsx",
+      "label": "WorkbenchDrawer",
+      "type": "class",
+      "file": "frontend/src/components/drawer/workbench-drawer.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 10,
+      "is_god_node": true,
+      "description": "4-tab slide-out workbench drawer rendering root cause analysis, AST localized files, repro sandbox, and fix checklist."
+    },
+    {
+      "id": "frontend/src/components/roi/roi-calculator.tsx",
+      "label": "RoiCalculator",
+      "type": "class",
+      "file": "frontend/src/components/roi/roi-calculator.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "Interactive $/hr calculator and ROI tier badge component (🔥 $150+/hr, ⚡ $75-$150/hr, ⚖️ $30-$75/hr)."
+    },
+    {
+      "id": "frontend/src/components/modals/notification-modal.tsx",
+      "label": "NotificationModal",
+      "type": "class",
+      "file": "frontend/src/components/modals/notification-modal.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Modal interface for Telegram bot pairing, Discord webhook URL configuration, and test message dispatch."
+    },
+    {
+      "id": "frontend/src/components/modals/pricing-modal.tsx",
+      "label": "PricingModal",
+      "type": "class",
+      "file": "frontend/src/components/modals/pricing-modal.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Interactive pricing comparison table (Free vs Pro vs Team) with Dodo Payments / Lemon Squeezy checkout triggers."
+    },
+    {
+      "id": "frontend/src/components/theme/theme-toggle.tsx",
+      "label": "ThemeToggle",
+      "type": "class",
+      "file": "frontend/src/components/theme/theme-toggle.tsx",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Zero-hydration-flicker theme toggle switching between Dark Mode, Light Mode, and System Theme."
+    },
+    {
+      "id": "frontend/src/hooks/use-issues.ts",
+      "label": "useIssues()",
+      "type": "function",
+      "file": "frontend/src/hooks/use-issues.ts",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "SWR hook fetching paginated issues with filter query synchronization and cache invalidation."
+    },
+    {
+      "id": "frontend/src/hooks/use-triage.ts",
+      "label": "useTriage()",
+      "type": "function",
+      "file": "frontend/src/hooks/use-triage.ts",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "SWR hook fetching or requesting on-demand AI triage reports and AST localized file candidates."
+    },
+    {
+      "id": "frontend/src/hooks/use-bounties.ts",
+      "label": "useBounties()",
+      "type": "function",
+      "file": "frontend/src/hooks/use-bounties.ts",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 5,
+      "description": "SWR hook retrieving funded bounties and calculating aggregate $/hr leaderboards."
+    },
+    {
+      "id": "frontend/src/lib/api-client.ts",
+      "label": "apiClient",
+      "type": "module",
+      "file": "frontend/src/lib/api-client.ts",
+      "community_id": 4,
+      "community_name": "Frontend UI & Terminal",
+      "confidence": 1.0,
+      "degree": 10,
+      "is_god_node": true,
+      "description": "Unified fetch/axios client with base URL resolution, timeout handling, and type-safe response parsing."
+    },
+    {
+      "id": "deploy/docker-compose.yml",
+      "label": "docker-compose.yml",
+      "type": "file",
+      "file": "docker-compose.yml",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 6,
+      "description": "Local full-stack orchestration composing FastAPI backend, Next.js frontend, PostgreSQL, and Redis."
+    },
+    {
+      "id": "deploy/Dockerfile",
+      "label": "Dockerfile",
+      "type": "file",
+      "file": "Dockerfile",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 4,
+      "description": "Multi-stage production Docker container with non-root security execution and lightweight footprint."
+    },
+    {
+      "id": "deploy/vercel.json",
+      "label": "vercel.json",
+      "type": "file",
+      "file": "deploy/vercel.json",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Vercel Global Edge CDN deployment configuration with caching headers and rewrite rules."
+    },
+    {
+      "id": "deploy/render.yaml",
+      "label": "render.yaml",
+      "type": "file",
+      "file": "deploy/render.yaml",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Render infrastructure-as-code blueprint deploying web service and background cron worker."
+    },
+    {
+      "id": "deploy/fly.toml",
+      "label": "fly.toml",
+      "type": "file",
+      "file": "deploy/fly.toml",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 3,
+      "description": "Fly.io edge container configuration with automated health checks and autoscaling rules."
+    },
+    {
+      "id": "tests/backend/tests",
+      "label": "Pytest Suite",
+      "type": "module",
+      "file": "backend/tests/",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 9,
+      "description": "Automated backend unit and integration test suite validating scrapers, API endpoints, and dispatchers."
+    },
+    {
+      "id": "tests/e2e/test_audit_integrity.py",
+      "label": "E2E Audit Suite",
+      "type": "module",
+      "file": "tests/e2e/test_audit_integrity.py",
+      "community_id": 5,
+      "community_name": "Deployment & CI",
+      "confidence": 1.0,
+      "degree": 7,
+      "description": "Opaque-box adversarial audit test suite verifying zero mock issues, theme toggling, and OWASP compliance."
+    }
+  ],
+  "edges": [
+    {"source": "backend/app/main.py", "target": "backend/app/main.py:create_app", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py:create_app", "target": "backend/app/main.py:lifespan", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/database.py:init_db", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/database.py:close_db", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/security/headers.py:SecurityHeadersMiddleware", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/security/rate_limiter.py:limiter", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/main.py", "target": "backend/app/api/v1/router.py:api_router", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/database.py", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/database.py:init_db", "target": "backend/app/database.py:Base", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/models/issue.py:Issue", "target": "backend/app/database.py:Base", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/models/triage.py:TriageReport", "target": "backend/app/database.py:Base", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/models/subscription.py:NotificationSubscription", "target": "backend/app/database.py:Base", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/models/billing.py:BillingSubscription", "target": "backend/app/database.py:Base", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/models/billing.py:CheckoutSession", "target": "backend/app/database.py:Base", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/models/triage.py:TriageReport", "target": "backend/app/models/issue.py:Issue", "relation": "affects", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/health.py:GET /health", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/issues.py:GET /issues", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/issues.py:GET /issues/{id}", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/bounties.py:GET /bounties", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/triage.py:GET /triage/{id}", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/triage.py:POST /triage/generate", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/notifications.py:POST /subscribe", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/router.py:api_router", "target": "backend/app/api/v1/billing.py:POST /checkout", "relation": "routes_to", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues", "target": "backend/app/database.py:get_db", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues", "target": "backend/app/schemas/issue.py:PaginatedIssuesResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues", "target": "backend/app/schemas/issue.py:IssueResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues/{id}", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/issues.py:GET /issues/{id}", "target": "backend/app/schemas/issue.py:IssueResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/bounties.py:GET /bounties", "target": "backend/app/database.py:get_db", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/bounties.py:GET /bounties", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/bounties.py:GET /bounties", "target": "backend/app/schemas/bounty.py:BountyResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/scrapers/github_client.py:GitHubClient", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/scrapers/domain_registry.py:DOMAIN_REGISTRY", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/scrapers/bounty_extractor.py:BountyExtractor", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/scrapers/classifier.py:IssueClassifier", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/triage/ast_localizer.py:ASTLocalizer", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/triage/repro_generator.py:ReproGenerator", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/triage/fix_planner.py:FixPlanner", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/models/issue.py:Issue", "relation": "affects", "confidence": 1.0},
+    {"source": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "target": "backend/app/models/triage.py:TriageReport", "relation": "affects", "confidence": 1.0},
+    {"source": "backend/app/scrapers/github_client.py:GitHubClient", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/triage/ast_localizer.py:ASTLocalizer", "target": "backend/app/triage/ast_localizer.py:extract_stack_traces", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/triage/ast_localizer.py:ASTLocalizer", "target": "backend/app/triage/ast_localizer.py:extract_ast_symbols_python", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/triage/ast_localizer.py:ASTLocalizer", "target": "backend/app/schemas/triage.py:LocalizedFile", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/triage/fix_planner.py:FixPlanner", "target": "backend/app/schemas/triage.py:FixPlanStep", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/models/triage.py:TriageReport", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/triage/ast_localizer.py:ASTLocalizer", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/triage/repro_generator.py:ReproGenerator", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/triage/fix_planner.py:FixPlanner", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:GET /triage/{id}", "target": "backend/app/schemas/triage.py:TriageResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:POST /triage/generate", "target": "backend/app/triage/ast_localizer.py:ASTLocalizer", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:POST /triage/generate", "target": "backend/app/triage/repro_generator.py:ReproGenerator", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:POST /triage/generate", "target": "backend/app/triage/fix_planner.py:FixPlanner", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/triage.py:POST /triage/generate", "target": "backend/app/schemas/triage.py:TriageResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/dispatcher/base.py:AlertPayload", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/models/subscription.py:NotificationSubscription", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/dispatcher/telegram.py:TelegramNotifier", "relation": "dispatches_to", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/dispatcher/discord.py:DiscordNotifier", "relation": "dispatches_to", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/dispatcher/email.py:EmailNotifier", "relation": "dispatches_to", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/router.py:NotificationRouter", "target": "backend/app/dispatcher/whatsapp.py:WhatsAppNotifier", "relation": "dispatches_to", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/telegram.py:TelegramNotifier", "target": "backend/app/dispatcher/base.py:BaseNotifier", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/discord.py:DiscordNotifier", "target": "backend/app/dispatcher/base.py:BaseNotifier", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/email.py:EmailNotifier", "target": "backend/app/dispatcher/base.py:BaseNotifier", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/whatsapp.py:WhatsAppNotifier", "target": "backend/app/dispatcher/base.py:BaseNotifier", "relation": "inherits", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/telegram.py:TelegramNotifier", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/discord.py:DiscordNotifier", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/email.py:EmailNotifier", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/dispatcher/whatsapp.py:WhatsAppNotifier", "target": "backend/app/config.py:Settings", "relation": "imports", "confidence": 1.0},
+    {"source": "backend/app/api/v1/notifications.py:POST /subscribe", "target": "backend/app/models/subscription.py:NotificationSubscription", "relation": "affects", "confidence": 1.0},
+    {"source": "backend/app/api/v1/notifications.py:POST /subscribe", "target": "backend/app/schemas/notification.py:SubscriptionCreate", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/notifications.py:POST /subscribe", "target": "backend/app/schemas/notification.py:SubscriptionResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/notifications.py:POST /test", "target": "backend/app/dispatcher/router.py:NotificationRouter", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /checkout", "target": "backend/app/billing/dodo.py:DodoPaymentsClient", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /checkout", "target": "backend/app/billing/lemonsqueezy.py:LemonSqueezyClient", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /checkout", "target": "backend/app/models/billing.py:CheckoutSession", "relation": "affects", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /checkout", "target": "backend/app/schemas/billing.py:CheckoutRequest", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:GET /status", "target": "backend/app/models/billing.py:BillingSubscription", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:GET /status", "target": "backend/app/schemas/billing.py:SubscriptionStatusResponse", "relation": "validates", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /webhooks/dodo", "target": "backend/app/billing/webhook_handler.py:verify_dodo_signature", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /webhooks/dodo", "target": "backend/app/billing/webhook_handler.py:WebhookProcessor", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /webhooks/lemonsqueezy", "target": "backend/app/billing/webhook_handler.py:verify_lemonsqueezy_signature", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/api/v1/billing.py:POST /webhooks/lemonsqueezy", "target": "backend/app/billing/webhook_handler.py:WebhookProcessor", "relation": "calls", "confidence": 1.0},
+    {"source": "backend/app/billing/webhook_handler.py:WebhookProcessor", "target": "backend/app/models/billing.py:BillingSubscription", "relation": "affects", "confidence": 1.0},
+    {"source": "frontend/src/app/page.tsx", "target": "frontend/src/components/explorer/issue-explorer.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/app/page.tsx", "target": "frontend/src/components/drawer/workbench-drawer.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/app/layout.tsx", "target": "frontend/src/components/theme/theme-toggle.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/explorer/issue-explorer.tsx", "target": "frontend/src/hooks/use-issues.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/explorer/issue-explorer.tsx", "target": "frontend/src/hooks/use-bounties.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/explorer/issue-explorer.tsx", "target": "frontend/src/components/roi/roi-calculator.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/explorer/issue-explorer.tsx", "target": "frontend/src/components/modals/notification-modal.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/explorer/issue-explorer.tsx", "target": "frontend/src/components/modals/pricing-modal.tsx", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/components/drawer/workbench-drawer.tsx", "target": "frontend/src/hooks/use-triage.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/hooks/use-issues.ts", "target": "frontend/src/lib/api-client.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/hooks/use-triage.ts", "target": "frontend/src/lib/api-client.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/hooks/use-bounties.ts", "target": "frontend/src/lib/api-client.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/hooks/use-checkout.ts", "target": "frontend/src/lib/api-client.ts", "relation": "calls", "confidence": 1.0},
+    {"source": "frontend/src/lib/api-client.ts", "target": "backend/app/api/v1/issues.py:GET /issues", "relation": "calls", "confidence": 0.85},
+    {"source": "frontend/src/lib/api-client.ts", "target": "backend/app/api/v1/triage.py:GET /triage/{id}", "relation": "calls", "confidence": 0.85},
+    {"source": "frontend/src/lib/api-client.ts", "target": "backend/app/api/v1/bounties.py:GET /bounties", "relation": "calls", "confidence": 0.85},
+    {"source": "frontend/src/lib/api-client.ts", "target": "backend/app/api/v1/notifications.py:POST /subscribe", "relation": "calls", "confidence": 0.85},
+    {"source": "frontend/src/lib/api-client.ts", "target": "backend/app/api/v1/billing.py:POST /checkout", "relation": "calls", "confidence": 0.85},
+    {"source": "deploy/docker-compose.yml", "target": "deploy/Dockerfile", "relation": "affects", "confidence": 1.0},
+    {"source": "deploy/docker-compose.yml", "target": "backend/app/main.py", "relation": "affects", "confidence": 0.85},
+    {"source": "deploy/docker-compose.yml", "target": "frontend/src/app/layout.tsx", "relation": "affects", "confidence": 0.85},
+    {"source": "deploy/vercel.json", "target": "frontend/src/app/layout.tsx", "relation": "affects", "confidence": 0.85},
+    {"source": "deploy/render.yaml", "target": "backend/app/main.py", "relation": "affects", "confidence": 0.85},
+    {"source": "deploy/fly.toml", "target": "backend/app/main.py", "relation": "affects", "confidence": 0.85},
+    {"source": "tests/backend/tests", "target": "backend/app/api/v1/issues.py:GET /issues", "relation": "calls", "confidence": 1.0},
+    {"source": "tests/backend/tests", "target": "backend/app/api/v1/triage.py:GET /triage/{id}", "relation": "calls", "confidence": 1.0},
+    {"source": "tests/backend/tests", "target": "backend/app/scrapers/orchestrator.py:ScraperOrchestrator", "relation": "calls", "confidence": 1.0},
+    {"source": "tests/backend/tests", "target": "backend/app/dispatcher/router.py:NotificationRouter", "relation": "calls", "confidence": 1.0},
+    {"source": "tests/e2e/test_audit_integrity.py", "target": "backend/app/main.py", "relation": "calls", "confidence": 1.0},
+    {"source": "tests/e2e/test_audit_integrity.py", "target": "backend/app/models/issue.py:Issue", "relation": "calls", "confidence": 1.0}
+  ],
+  "communities": {
+    "0": {
+      "id": 0,
+      "name": "Backend Core & Ingestion",
+      "color": "#3B82F6",
+      "node_count": 23,
+      "description": "FastAPI service entrypoint, database ORM session lifecycle, security middleware, and GitHub scraper engine."
+    },
+    "1": {
+      "id": 1,
+      "name": "AI Triage & AST Engine",
+      "color": "#8B5CF6",
+      "node_count": 11,
+      "description": "Abstract Syntax Tree analyzers, stack trace frame extractors, minimal repro generator, and fix planners."
+    },
+    "2": {
+      "id": 2,
+      "name": "Multi-Channel Dispatch",
+      "color": "#10B981",
+      "node_count": 12,
+      "description": "Real-time alert router matching subscriber filter rules across Telegram, Discord, Resend Email, and WhatsApp Pro."
+    },
+    "3": {
+      "id": 3,
+      "name": "Monetization & Webhooks",
+      "color": "#F59E0B",
+      "node_count": 13,
+      "description": "Turnkey Micro-SaaS billing integration with Dodo Payments, Lemon Squeezy, and HMAC signature webhooks."
+    },
+    "4": {
+      "id": 4,
+      "name": "Frontend UI & Terminal",
+      "color": "#EC4899",
+      "node_count": 12,
+      "description": "Next.js 14 Developer Dashboard featuring Dark/Light theme switching, faceted search, and workbench drawer."
+    },
+    "5": {
+      "id": 5,
+      "name": "Deployment & CI",
+      "color": "#06B6D4",
+      "node_count": 7,
+      "description": "Zero-cost cloud deployment blueprints (Vercel, Render, Fly.io, Neon, Upstash) and full-stack test suites."
+    }
+  },
+  "god_nodes": [
+    "backend/app/models/issue.py:Issue",
+    "backend/app/main.py",
+    "frontend/src/components/explorer/issue-explorer.tsx",
+    "backend/app/scrapers/orchestrator.py:ScraperOrchestrator",
+    "backend/app/schemas/issue.py:IssueResponse",
+    "backend/app/dispatcher/router.py:NotificationRouter",
+    "backend/app/triage/ast_localizer.py:ASTLocalizer",
+    "backend/app/config.py:Settings",
+    "frontend/src/lib/api-client.ts",
+    "frontend/src/components/drawer/workbench-drawer.tsx",
+    "backend/app/dispatcher/base.py:AlertPayload"
+  ]
+};
+
+    // State Variables
+    let currentData = JSON.parse(JSON.stringify(GRAPH_DATA));
+    let selectedNode = null;
+    let highlightGodNodes = true;
+    let blastRadiusDepth = 2;
+    let activeTypeFilters = new Set(["module", "class", "function", "endpoint", "schema", "file"]);
+    let activeCommunityFilters = new Set([0, 1, 2, 3, 4, 5]);
+
+    // D3 Visualization Engine
+    const svg = d3.select("#graph-svg");
+    const container = document.getElementById("graph-container");
+    let width = container.clientWidth || window.innerWidth;
+    let height = container.clientHeight || window.innerHeight;
+
+    svg.attr("viewBox", [0, 0, width, height]);
+
+    // Setup Zoom & Pan
+    const g = svg.append("g");
+    const zoom = d3.zoom()
+      .scaleExtent([0.15, 5])
+      .on("zoom", (event) => {
+        g.attr("transform", event.transform);
+      });
+
+    svg.call(zoom);
+
+    // Arrow markers for directed edges
+    const defs = svg.append("defs");
+    defs.append("marker")
+      .attr("id", "arrowhead")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 22)
+      .attr("refY", 0)
+      .attr("markerWidth", 6)
+      .attr("markerHeight", 6)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-5L10,0L0,5")
+      .attr("fill", "#64748b");
+
+    defs.append("marker")
+      .attr("id", "arrowhead-highlight")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 24)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("d", "M0,-5L10,0L0,5")
+      .attr("fill", "#38bdf8");
+
+    // Force Simulation Setup
+    const simulation = d3.forceSimulation()
+      .force("link", d3.forceLink().id(d => d.id).distance(80))
+      .force("charge", d3.forceManyBody().strength(-240))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collision", d3.forceCollide().radius(d => (d.is_god_node ? 28 : 16)))
+      .force("x", d3.forceX(width / 2).strength(0.04))
+      .force("y", d3.forceY(height / 2).strength(0.04));
+
+    // Element Groups
+    const linkGroup = g.append("g").attr("class", "links");
+    const nodeGroup = g.append("g").attr("class", "nodes");
+    const labelGroup = g.append("g").attr("class", "labels");
+
+    let linkElements, nodeElements, labelElements;
+
+    // Type Color Mapping
+    const RELATION_COLORS = {
+      "imports": "#818cf8",
+      "calls": "#6366f1",
+      "inherits": "#10b981",
+      "validates": "#c084fc",
+      "routes_to": "#22d3ee",
+      "dispatches_to": "#f59e0b",
+      "affects": "#f43f5e"
+    };
+
+    function getNodeRadius(d) {
+      if (d.is_god_node) return 18 + Math.min(d.degree, 12);
+      return 8 + Math.min(d.degree, 8);
+    }
+
+    function getNodeColor(d) {
+      const comm = currentData.communities[d.community_id];
+      return comm ? comm.color : "#64748b";
+    }
+
+    // Render / Update Graph
+    function updateGraph() {
+      // Filter active nodes & edges
+      const visibleNodes = currentData.nodes.filter(n => 
+        activeTypeFilters.has(n.type) && activeCommunityFilters.has(n.community_id)
+      );
+      const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+
+      const visibleEdges = currentData.edges.filter(e => {
+        const sId = typeof e.source === 'object' ? e.source.id : e.source;
+        const tId = typeof e.target === 'object' ? e.target.id : e.target;
+        return visibleNodeIds.has(sId) && visibleNodeIds.has(tId);
+      });
+
+      // Update Links
+      linkElements = linkGroup.selectAll("line")
+        .data(visibleEdges, d => `${d.source.id || d.source}->${d.target.id || d.target}`);
+
+      linkElements.exit().remove();
+
+      const linkEnter = linkElements.enter().append("line")
+        .attr("stroke-width", d => Math.max(1, d.confidence * 1.5))
+        .attr("stroke", d => RELATION_COLORS[d.relation] || "#475569")
+        .attr("stroke-opacity", 0.45)
+        .attr("marker-end", "url(#arrowhead)");
+
+      linkElements = linkEnter.merge(linkElements);
+
+      // Update Nodes
+      nodeElements = nodeGroup.selectAll("g")
+        .data(visibleNodes, d => d.id);
+
+      nodeElements.exit().remove();
+
+      const nodeEnter = nodeElements.enter().append("g")
+        .call(d3.drag()
+          .on("start", dragstarted)
+          .on("drag", dragged)
+          .on("end", dragended))
+        .on("click", (event, d) => handleNodeClick(event, d))
+        .on("mouseenter", (event, d) => showTooltip(event, d))
+        .on("mouseleave", hideTooltip);
+
+      // Node circles
+      nodeEnter.append("circle")
+        .attr("r", d => getNodeRadius(d))
+        .attr("fill", d => getNodeColor(d))
+        .attr("stroke", "#0f172a")
+        .attr("stroke-width", 2)
+        .attr("class", d => d.is_god_node && highlightGodNodes ? "node-god cursor-pointer" : "cursor-pointer");
+
+      // God node icon / crown
+      nodeEnter.filter(d => d.is_god_node).append("text")
+        .attr("text-anchor", "middle")
+        .attr("dominant-baseline", "central")
+        .attr("fill", "#ffffff")
+        .attr("font-size", "10px")
+        .attr("font-weight", "bold")
+        .attr("pointer-events", "none")
+        .text("★");
+
+      nodeElements = nodeEnter.merge(nodeElements);
+
+      // Update Labels
+      labelElements = labelGroup.selectAll("text")
+        .data(visibleNodes, d => d.id);
+
+      labelElements.exit().remove();
+
+      const labelEnter = labelElements.enter().append("text")
+        .attr("font-size", d => d.is_god_node ? "11px" : "9px")
+        .attr("font-family", "JetBrains Mono, monospace")
+        .attr("font-weight", d => d.is_god_node ? "700" : "500")
+        .attr("fill", d => d.is_god_node ? "#ffffff" : "#94a3b8")
+        .attr("dx", d => getNodeRadius(d) + 4)
+        .attr("dy", 3)
+        .attr("pointer-events", "none")
+        .text(d => d.label);
+
+      labelElements = labelEnter.merge(labelElements);
+
+      // Restart Simulation
+      simulation.nodes(visibleNodes).on("tick", ticked);
+      simulation.force("link").links(visibleEdges);
+      simulation.alpha(0.8).restart();
+    }
+
+    function ticked() {
+      linkElements
+        .attr("x1", d => d.source.x)
+        .attr("y1", d => d.source.y)
+        .attr("x2", d => d.target.x)
+        .attr("y2", d => d.target.y);
+
+      nodeElements
+        .attr("transform", d => `translate(${d.x},${d.y})`);
+
+      labelElements
+        .attr("x", d => d.x)
+        .attr("y", d => d.y);
+    }
+
+    // Drag Handlers
+    function dragstarted(event, d) {
+      if (!event.active) simulation.alphaTarget(0.3).restart();
+      d.fx = d.x;
+      d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+      d.fx = event.x;
+      d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+      if (!event.active) simulation.alphaTarget(0);
+      d.fx = null;
+      d.fy = null;
+    }
+
+    // Blast Radius Calculation (BFS)
+    function calculateBlastRadius(startNode, depth = 2) {
+      const neighbors = new Set([startNode.id]);
+      const activeEdges = new Set();
+      let currentLevel = new Set([startNode.id]);
+
+      for (let i = 0; i < depth; i++) {
+        const nextLevel = new Set();
+        currentData.edges.forEach(e => {
+          const sId = typeof e.source === 'object' ? e.source.id : e.source;
+          const tId = typeof e.target === 'object' ? e.target.id : e.target;
+
+          if (currentLevel.has(sId)) {
+            neighbors.add(tId);
+            nextLevel.add(tId);
+            activeEdges.add(`${sId}->${tId}`);
+          }
+          if (currentLevel.has(tId)) {
+            neighbors.add(sId);
+            nextLevel.add(sId);
+            activeEdges.add(`${sId}->${tId}`);
+          }
+        });
+        currentLevel = nextLevel;
+      }
+
+      return { nodes: neighbors, edges: activeEdges };
+    }
+
+    // Handle Node Click (Inspector & Blast Radius)
+    function handleNodeClick(event, d) {
+      event.stopPropagation();
+      selectedNode = d;
+
+      const blast = calculateBlastRadius(d, blastRadiusDepth);
+
+      // Highlight nodes
+      nodeElements.selectAll("circle")
+        .classed("node-highlighted", n => blast.nodes.has(n.id))
+        .classed("node-dimmed", n => !blast.nodes.has(n.id));
+
+      nodeElements.classed("node-dimmed", n => !blast.nodes.has(n.id));
+
+      // Highlight links
+      linkElements
+        .classed("edge-highlighted", e => {
+          const sId = typeof e.source === 'object' ? e.source.id : e.source;
+          const tId = typeof e.target === 'object' ? e.target.id : e.target;
+          return blast.edges.has(`${sId}->${tId}`);
+        })
+        .classed("edge-dimmed", e => {
+          const sId = typeof e.source === 'object' ? e.source.id : e.source;
+          const tId = typeof e.target === 'object' ? e.target.id : e.target;
+          return !blast.edges.has(`${sId}->${tId}`);
+        })
+        .attr("marker-end", e => {
+          const sId = typeof e.source === 'object' ? e.source.id : e.source;
+          const tId = typeof e.target === 'object' ? e.target.id : e.target;
+          return blast.edges.has(`${sId}->${tId}`) ? "url(#arrowhead-highlight)" : "url(#arrowhead)";
+        });
+
+      // Highlight labels
+      labelElements.classed("node-dimmed", n => !blast.nodes.has(n.id));
+
+      // Populate & Open Inspector Drawer
+      openInspector(d, blast);
+    }
+
+    // Reset Highlights on Canvas Click
+    svg.on("click", () => {
+      selectedNode = null;
+      nodeElements.selectAll("circle").classed("node-highlighted", false).classed("node-dimmed", false);
+      nodeElements.classed("node-dimmed", false);
+      linkElements.classed("edge-highlighted", false).classed("edge-dimmed", false).attr("marker-end", "url(#arrowhead)");
+      labelElements.classed("node-dimmed", false);
+      closeInspector();
+    });
+
+    // Tooltip Handlers
+    const tooltip = d3.select("#tooltip");
+    function showTooltip(event, d) {
+      if (selectedNode) return;
+      tooltip
+        .style("left", `${event.pageX + 15}px`)
+        .style("top", `${event.pageY - 20}px`)
+        .classed("hidden", false);
+
+      d3.select("#tt-title").html(`
+        <span class="w-2 h-2 rounded-full inline-block" style="background:${getNodeColor(d)}"></span>
+        ${d.label}
+        ${d.is_god_node ? '<span class="text-[10px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 font-normal">Hub</span>' : ''}
+      `);
+      d3.select("#tt-type").text(`AST [${d.type.toUpperCase()}] • ${d.community_name}`);
+      d3.select("#tt-desc").text(d.description || "No documentation available.");
+      d3.select("#tt-meta").html(`<span>Degree: ${d.degree}</span><span>Confidence: ${(d.confidence * 100).toFixed(0)}%</span>`);
+    }
+
+    function hideTooltip() {
+      tooltip.classed("hidden", true);
+    }
+
+    // Inspector Drawer View
+    function openInspector(node, blast) {
+      const drawer = document.getElementById("inspector-drawer");
+      drawer.classList.remove("translate-x-full");
+
+      const comm = currentData.communities[node.community_id];
+      document.getElementById("insp-cluster-dot").style.backgroundColor = comm ? comm.color : "#6366f1";
+
+      // Find callers and callees
+      const callers = [];
+      const callees = [];
+
+      currentData.edges.forEach(e => {
+        const sId = typeof e.source === 'object' ? e.source.id : e.source;
+        const tId = typeof e.target === 'object' ? e.target.id : e.target;
+        if (sId === node.id) {
+          const targetNode = currentData.nodes.find(n => n.id === tId);
+          if (targetNode) callees.push({ node: targetNode, relation: e.relation, confidence: e.confidence });
+        }
+        if (tId === node.id) {
+          const sourceNode = currentData.nodes.find(n => n.id === sId);
+          if (sourceNode) callers.push({ node: sourceNode, relation: e.relation, confidence: e.confidence });
+        }
+      });
+
+      const content = document.getElementById("inspector-content");
+      content.innerHTML = `
+        <div class="bg-dark-800 p-3 rounded-lg border border-dark-700">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="font-bold text-sm text-white font-mono">${node.label}</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono uppercase font-semibold ${node.is_god_node ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-dark-700 text-slate-300'}">
+              ${node.type}
+            </span>
+          </div>
+          <p class="text-slate-300 text-xs leading-relaxed mb-3">${node.description}</p>
+          <div class="grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-400 bg-dark-850 p-2 rounded border border-dark-700/50">
+            <div>Degree: <span class="text-white font-semibold">${node.degree}</span></div>
+            <div>Confidence: <span class="text-emerald-400 font-semibold">${(node.confidence * 100).toFixed(0)}%</span></div>
+            <div>Subsystem: <span class="text-indigo-300">${node.community_name}</span></div>
+            <div>God Hub: <span class="${node.is_god_node ? 'text-amber-400 font-bold' : 'text-slate-500'}">${node.is_god_node ? 'YES' : 'NO'}</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-slate-400 uppercase tracking-wider text-[11px] mb-2">Source Location</h4>
+          <div class="bg-dark-800 p-2 rounded border border-dark-700 font-mono text-indigo-300 text-xs break-all">
+            ${node.file}
+          </div>
+        </div>
+
+        <div class="bg-dark-850 p-3 rounded-lg border border-dark-700/60">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="font-semibold text-cyan-400 uppercase tracking-wider text-[11px]">AST Blast Radius</h4>
+            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">
+              ${blast.nodes.size} Nodes Affected
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-2">
+            Modifying this symbol directly impacts <strong class="text-white">${blast.nodes.size - 1}</strong> dependent modules across the codebase.
+          </p>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-slate-400 uppercase tracking-wider text-[11px] mb-2 flex items-center justify-between">
+            <span>Callees / Outgoing (${callees.length})</span>
+          </h4>
+          <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            ${callees.length > 0 ? callees.map(c => `
+              <div class="p-1.5 bg-dark-800 hover:bg-dark-700 rounded border border-dark-700/50 flex items-center justify-between text-[11px] cursor-pointer" onclick="selectNodeById('${c.node.id}')">
+                <span class="font-mono text-slate-200 truncate max-w-[170px]">${c.node.label}</span>
+                <span class="text-[10px] font-mono px-1 rounded bg-indigo-500/20 text-indigo-300">${c.relation}</span>
+              </div>
+            `).join('') : '<div class="text-slate-500 text-[11px] italic">No outgoing dependencies.</div>'}
+          </div>
+        </div>
+
+        <div>
+          <h4 class="font-semibold text-slate-400 uppercase tracking-wider text-[11px] mb-2 flex items-center justify-between">
+            <span>Callers / Inbound (${callers.length})</span>
+          </h4>
+          <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+            ${callers.length > 0 ? callers.map(c => `
+              <div class="p-1.5 bg-dark-800 hover:bg-dark-700 rounded border border-dark-700/50 flex items-center justify-between text-[11px] cursor-pointer" onclick="selectNodeById('${c.node.id}')">
+                <span class="font-mono text-slate-200 truncate max-w-[170px]">${c.node.label}</span>
+                <span class="text-[10px] font-mono px-1 rounded bg-purple-500/20 text-purple-300">${c.relation}</span>
+              </div>
+            `).join('') : '<div class="text-slate-500 text-[11px] italic">No inbound callers.</div>'}
+          </div>
+        </div>
+      `;
+    }
+
+    function closeInspector() {
+      document.getElementById("inspector-drawer").classList.add("translate-x-full");
+    }
+
+    function selectNodeById(nodeId) {
+      const node = currentData.nodes.find(n => n.id === nodeId);
+      if (node) {
+        handleNodeClick(d3.event || window.event || { stopPropagation: () => {} }, node);
+      }
+    }
+
+    // Populate Sidebar UI
+    function initializeSidebar() {
+      // Communities
+      const legend = document.getElementById("community-legend");
+      legend.innerHTML = Object.values(currentData.communities).map(c => `
+        <label class="flex items-center justify-between p-1.5 rounded hover:bg-dark-800 cursor-pointer text-xs transition">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" checked value="${c.id}" class="community-checkbox rounded border-dark-700 text-indigo-600 focus:ring-0">
+            <span class="w-2.5 h-2.5 rounded-full" style="background:${c.color}"></span>
+            <span class="text-slate-300 font-medium">${c.name}</span>
+          </div>
+          <span class="text-[10px] font-mono text-slate-500 px-1 bg-dark-850 rounded border border-dark-700/50">${c.node_count}</span>
+        </label>
+      `).join('');
+
+      document.querySelectorAll(".community-checkbox").forEach(cb => {
+        cb.addEventListener("change", (e) => {
+          const val = parseInt(e.target.value);
+          if (e.target.checked) activeCommunityFilters.add(val);
+          else activeCommunityFilters.delete(val);
+          updateGraph();
+        });
+      });
+
+      // Node Types
+      const types = ["module", "class", "function", "endpoint", "schema", "file"];
+      const typeFilters = document.getElementById("type-filters");
+      typeFilters.innerHTML = types.map(t => `
+        <label class="flex items-center justify-between p-1.5 rounded hover:bg-dark-800 cursor-pointer transition">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" checked value="${t}" class="type-checkbox rounded border-dark-700 text-indigo-600 focus:ring-0">
+            <span class="capitalize text-slate-300">${t}</span>
+          </div>
+          <span class="text-[10px] font-mono text-slate-500 px-1 bg-dark-850 rounded">
+            ${currentData.nodes.filter(n => n.type === t).length}
+          </span>
+        </label>
+      `).join('');
+
+      document.querySelectorAll(".type-checkbox").forEach(cb => {
+        cb.addEventListener("change", (e) => {
+          if (e.target.checked) activeTypeFilters.add(e.target.value);
+          else activeTypeFilters.delete(e.target.value);
+          updateGraph();
+        });
+      });
+    }
+
+    // Search Box Listener
+    document.getElementById("search-input").addEventListener("input", (e) => {
+      const q = e.target.value.toLowerCase().trim();
+      if (!q) {
+        nodeElements.selectAll("circle").classed("node-highlighted", false).classed("node-dimmed", false);
+        nodeElements.classed("node-dimmed", false);
+        linkElements.classed("edge-highlighted", false).classed("edge-dimmed", false);
+        labelElements.classed("node-dimmed", false);
+        return;
+      }
+
+      const matching = currentData.nodes.filter(n => 
+        n.label.toLowerCase().includes(q) || n.file.toLowerCase().includes(q) || n.description.toLowerCase().includes(q)
+      );
+      const matchIds = new Set(matching.map(n => n.id));
+
+      nodeElements.selectAll("circle")
+        .classed("node-highlighted", n => matchIds.has(n.id))
+        .classed("node-dimmed", n => !matchIds.has(n.id));
+
+      nodeElements.classed("node-dimmed", n => !matchIds.has(n.id));
+      labelElements.classed("node-dimmed", n => !matchIds.has(n.id));
+      linkElements.classed("edge-dimmed", true);
+    });
+
+    // Control Button Listeners
+    document.getElementById("btn-close-inspector").addEventListener("click", closeInspector);
+
+    document.getElementById("btn-reheat").addEventListener("click", () => {
+      simulation.alpha(1).restart();
+    });
+
+    document.getElementById("btn-reset-zoom").addEventListener("click", () => {
+      svg.transition().duration(750).call(
+        zoom.transform,
+        d3.zoomIdentity.translate(width / 2 - width / 2, height / 2 - height / 2).scale(1)
+      );
+    });
+
+    document.getElementById("btn-zoom-in").addEventListener("click", () => {
+      svg.transition().duration(300).call(zoom.scaleBy, 1.3);
+    });
+
+    document.getElementById("btn-zoom-out").addEventListener("click", () => {
+      svg.transition().duration(300).call(zoom.scaleBy, 0.75);
+    });
+
+    document.getElementById("btn-toggle-gods").addEventListener("click", () => {
+      highlightGodNodes = !highlightGodNodes;
+      nodeElements.selectAll("circle")
+        .attr("class", d => d.is_god_node && highlightGodNodes ? "node-god cursor-pointer" : "cursor-pointer");
+    });
+
+    document.getElementById("blast-slider").addEventListener("input", (e) => {
+      blastRadiusDepth = parseInt(e.target.value);
+      document.getElementById("blast-depth-label").innerText = `${blastRadiusDepth} Hops`;
+      if (selectedNode) {
+        const blast = calculateBlastRadius(selectedNode, blastRadiusDepth);
+        handleNodeClick({ stopPropagation: () => {} }, selectedNode);
+      }
+    });
+
+    document.getElementById("btn-toggle-all-types").addEventListener("click", () => {
+      const allActive = activeTypeFilters.size === 6;
+      if (allActive) activeTypeFilters.clear();
+      else activeTypeFilters = new Set(["module", "class", "function", "endpoint", "schema", "file"]);
+      
+      document.querySelectorAll(".type-checkbox").forEach(cb => {
+        cb.checked = !allActive;
+      });
+      updateGraph();
+    });
+
+    document.getElementById("btn-export-json").addEventListener("click", () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(currentData, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "gitscout_ast_graph.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    });
+
+    // Window Resize Handler
+    window.addEventListener("resize", () => {
+      width = container.clientWidth || window.innerWidth;
+      height = container.clientHeight || window.innerHeight;
+      svg.attr("viewBox", [0, 0, width, height]);
+      simulation.force("center", d3.forceCenter(width / 2, height / 2));
+      simulation.alpha(0.3).restart();
+    });
+
+    // Initialize application
+    initializeSidebar();
+    updateGraph();
+  </script>
+</body>
+</html>
