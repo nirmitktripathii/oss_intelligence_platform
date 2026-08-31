@@ -74,14 +74,21 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
           description: 'A test embed payload was dispatched to your Discord server.',
           type: 'success',
         });
+      } else {
+        setDiscordVerified(false);
+        toast({
+          title: 'Test Not Delivered',
+          description: res.message || 'Could not reach the notification service. No message was sent.',
+          type: 'error',
+        });
       }
     } catch {
+      setDiscordVerified(false);
       toast({
-        title: 'Dispatched Test Webhook',
-        description: 'Test message sent to Discord.',
-        type: 'info',
+        title: 'Test Failed',
+        description: 'Could not reach the notification service. No test message was sent.',
+        type: 'error',
       });
-      setDiscordVerified(true);
     } finally {
       setDiscordTesting(false);
     }

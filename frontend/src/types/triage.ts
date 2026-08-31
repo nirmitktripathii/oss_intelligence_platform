@@ -38,4 +38,6 @@ export interface TriageReport {
   suggestedPrTitle: string;
   generatedAt: string;
   confidenceScore: number;
+  /** True when this report is an offline illustrative sample, not real backend analysis. */
+  isDemo?: boolean;
 }

@@ -58,9 +58,9 @@ class ApiClient {
       );
     } catch {
       return {
-        status: 'healthy (demo fallback mode)',
+        status: 'degraded (offline - showing demo data)',
         issues_count: SAMPLE_FALLBACK_ISSUES.length,
-        db_connected: true,
+        db_connected: false,
         version: '1.0.0',
       };
     }
@@ -186,8 +186,8 @@ class ApiClient {
       });
     } catch {
       return {
-        success: true,
-        message: `[Simulated] Verified ping dispatched to ${data.channel} destination: ${data.destination}`,
+        success: false,
+        message: `Could not reach the notification service - no test message was sent to ${data.channel}.`,
         channel: data.channel,
         timestamp: new Date().toISOString(),
       };
@@ -212,11 +212,8 @@ class ApiClient {
         provider: res.provider || data.provider,
       };
     } catch {
-      return {
-        checkoutUrl: `https://checkout.gitscout.dev/${data.provider}?plan=${data.planId}&cycle=${data.billingCycle}`,
-        sessionId: `sim_cs_${Date.now()}`,
-        provider: data.provider,
-      };
+      // Do NOT fabricate a checkout URL — surface the failure so the UI can show it.
+      throw new Error('Checkout is temporarily unavailable (backend unreachable). Please try again shortly.');
     }
   }
 
@@ -248,6 +245,7 @@ class ApiClient {
       totalPages: res.total_pages ?? res.totalPages ?? Math.ceil((res.total || items.length) / 20),
       domainCounts: res.domain_counts || {},
       totalBountyPoolUsd: res.total_bounty_pool_usd,
+      isDemo: false,
     };
   }
 
@@ -356,6 +354,7 @@ class ApiClient {
       suggestedPrTitle: res.suggested_pr_title || res.suggestedPrTitle || `fix: resolve issue ${issueId}`,
       generatedAt: res.generated_at || res.generatedAt || new Date().toISOString(),
       confidenceScore: res.confidence_score || res.confidenceScore || 0.94,
+      isDemo: false,
     };
   }
 
@@ -425,6 +424,7 @@ class ApiClient {
       pageSize,
       totalPages: Math.ceil(total / pageSize) || 1,
       totalBountyPoolUsd: filtered.reduce((acc, i) => acc + (i.bounty?.amountUsd || 0), 0),
+      isDemo: true,
     };
   }
 
@@ -436,8 +436,8 @@ class ApiClient {
 
     return {
       issueId: issue.id,
-      summary: `Automated AST file localization and reproduction blueprint generated for ${owner}/${repo} #${num}.`,
-      rootCauseAnalysis: `Root cause identified in input boundary validation: when data exceeds the preallocated buffer or type boundary, memory alignment assertion triggers failure without a clean fallback exception.`,
+      summary: `[DEMO - offline sample, not real analysis] Illustrative AST localization & reproduction blueprint for ${owner}/${repo} #${num}. Connect the backend to get a genuine triage report.`,
+      rootCauseAnalysis: `[DEMO - offline sample] Root cause identified in input boundary validation: when data exceeds the preallocated buffer or type boundary, memory alignment assertion triggers failure without a clean fallback exception.`,
       affectedSubsystems: [
         `${issue.repository.language} Core Engine`,
         'Type Validation & Memory Subsystem',
@@ -508,7 +508,8 @@ class ApiClient {
       branchingConvention: `fix/issue-${num}`,
       suggestedPrTitle: `fix(core): resolve boundary overflow for large batch size (#${num})`,
       generatedAt: new Date().toISOString(),
-      confidenceScore: 0.95,
+      confidenceScore: 0,
+      isDemo: true,
     };
   }
 }

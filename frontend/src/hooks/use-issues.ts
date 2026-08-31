@@ -44,6 +44,7 @@ export function useIssues(filters: Partial<FilterState>) {
     page: data?.page || 1,
     totalBountyPoolUsd: data?.totalBountyPoolUsd || 0,
     domainCounts: data?.domainCounts || {},
+    isDemo: data?.isDemo || false,
     isLoading,
     error,
     refetch: fetchIssues,

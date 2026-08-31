@@ -39,7 +39,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
     isFiltered,
   } = useFilters();
 
-  const { issues, total, totalPages, page, isLoading } = useIssues(filters);
+  const { issues, total, totalPages, page, isLoading, isDemo } = useIssues(filters);
 
   const [selectedIndex, setSelectedIndex] = React.useState<number>(0);
   const [activeDrawerIssue, setActiveDrawerIssue] = React.useState<Issue | null>(null);
@@ -83,6 +83,13 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
 
   return (
     <div className="space-y-6 font-mono">
+      {/* Offline demo-data notice — shown only when the live backend is unreachable */}
+      {isDemo && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          ⚠️ Showing offline demo data — the live backend is unreachable (it may be waking from sleep). These are sample issues, not the live stream. Refresh in a moment.
+        </div>
+      )}
+
       {/* Top Telemetry Counters */}
       <IssueStatsBar totalIssuesCount={total} />
 
