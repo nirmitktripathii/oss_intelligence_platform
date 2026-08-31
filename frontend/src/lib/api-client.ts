@@ -9,13 +9,22 @@ import {
 import { CheckoutRequest, CheckoutResponse, SubscriptionStatus } from '@/types/billing';
 import { SAMPLE_FALLBACK_ISSUES } from './constants';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+function resolveApiBase(rawUrl?: string): string {
+  let url = (rawUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').trim();
+  url = url.replace(/\/+$/, '');
+  if (!url.endsWith('/api/v1')) {
+    url = `${url}/api/v1`;
+  }
+  return url;
+}
+
+const API_BASE = resolveApiBase();
 
 class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = resolveApiBase(baseUrl);
   }
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
