@@ -86,8 +86,9 @@ High-Throughput Open-Source Issue Intelligence, Triage & Contribution Web Platfo
         max_age=86400,
     )
 
-    # 3. Mount API v1 Router
+    # 3. Mount API v1 Router (Primary + Root Alias)
     application.include_router(api_router, prefix=settings.API_V1_STR)
+    application.include_router(api_router)  # Fallback alias for direct requests
 
     # 4. Root Welcome / Telemetry Route
     @application.get("/", tags=["Root"])
