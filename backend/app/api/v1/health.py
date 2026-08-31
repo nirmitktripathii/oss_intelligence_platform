@@ -7,13 +7,15 @@ from app.config import settings
 from app.database import get_db
 from app.models.issue import Issue
 
+from app.cache import ping_redis_health
+
 router = APIRouter(tags=["Health"])
 
 
 @router.get("/health", summary="System Health & Telemetry")
 async def health_check(db: AsyncSession = Depends(get_db)):
     """
-    Returns system status, active database connectivity, and total indexed open issues count.
+    Returns system status, active database connectivity, Upstash Redis cache status, and total indexed open issues count.
     """
     db_connected = False
     issues_count = 0
@@ -31,10 +33,18 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     except Exception:
         db_connected = False
 
+    # Check Upstash Redis Cache Health
+    redis_health = await ping_redis_health()
+
     return {
         "status": "healthy" if db_connected else "degraded",
         "issues_count": issues_count,
         "db_connected": db_connected,
+        "database": {
+            "status": "connected" if db_connected else "disconnected",
+            "provider": "Neon Lakebase PostgreSQL" if "neon.tech" in settings.DATABASE_URL else "SQLite",
+        },
+        "cache": redis_health,
         "version": settings.VERSION,
         "environment": settings.ENVIRONMENT,
     }

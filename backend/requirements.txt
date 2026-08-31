@@ -17,3 +17,5 @@ pytest>=8.2.0
 pytest-asyncio>=0.23.7
 respx>=0.21.1
 pytest-cov>=5.0.0
+upstash-redis>=1.8.0
+redis>=5.0.0

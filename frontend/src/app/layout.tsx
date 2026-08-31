@@ -6,6 +6,8 @@ import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { PlatformJsonLd } from '@/components/seo/json-ld';
 import { DEFAULT_METADATA } from '@/lib/seo-config';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+import { Analytics } from '@vercel/analytics/react';
 
 export const metadata: Metadata = DEFAULT_METADATA;
 
@@ -33,6 +35,8 @@ export default function RootLayout({
             <Footer />
           </ToastProvider>
         </ThemeProvider>
+        <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );

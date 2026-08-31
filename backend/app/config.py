@@ -5,9 +5,18 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_PATH = BASE_DIR / ".env"
+if ENV_PATH.exists():
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_PATH),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -33,6 +42,11 @@ class Settings(BaseSettings):
         "https://*.vercel.app",
     ]
     RATE_LIMIT_DEFAULT: str = "60/minute"
+
+    # Upstash Serverless Redis Cache
+    UPSTASH_REDIS_REST_URL: Optional[str] = None
+    UPSTASH_REDIS_REST_TOKEN: Optional[str] = None
+    REDIS_URL: Optional[str] = None
 
     # GitHub Scraper & Scheduler
     GITHUB_TOKEN: Optional[str] = None
