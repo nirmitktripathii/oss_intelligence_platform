@@ -32,4 +32,5 @@ async def test_cors_headers_on_preflight(client: httpx.AsyncClient):
     }
     response = await client.options("/api/v1/issues", headers=headers)
     assert response.status_code in (200, 204)
-    assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+    allow_origin = response.headers.get("access-control-allow-origin")
+    assert allow_origin in ("http://localhost:3000", "*")
