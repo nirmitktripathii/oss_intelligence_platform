@@ -1,0 +1,48 @@
+name: Keep-Alive Health Ping
+
+# Purpose: keep the Render free-tier backend warm. It idles out after ~15 min,
+# so the first request afterward returns 503 -- which also trips the frontend's
+# demo-fallback (fabricated) data. This pings /health on a short interval.
+#
+# Caveats:
+#  * GitHub scheduled workflows run ONLY on the default branch, so this activates
+#    once merged to `main`.
+#  * Scheduled runs can be delayed under load -> best-effort. An external monitor
+#    (UptimeRobot / BetterStack, 5-10 min) is more reliable.
+#  * Actions minutes are free/unlimited here because the repository is public.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # every 10 minutes (margin under the ~15 min sleep)
+  workflow_dispatch: {}
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  HEALTH_URL: "https://gitscout-api.onrender.com/api/v1/health"
+
+jobs:
+  ping:
+    name: Ping backend health endpoint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Warm the backend
+        run: |
+          echo "Pinging $HEALTH_URL"
+          # Retry through the cold-start window; --retry-all-errors covers the initial 503.
+          http_code=$(curl -sS -o /tmp/health.json -w "%{http_code}" \
+            --max-time 90 --retry 5 --retry-delay 15 --retry-all-errors \
+            "$HEALTH_URL" || echo "000")
+          echo "HTTP status: $http_code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          if [ "$http_code" != "200" ]; then
+            # Warn (not fail) so a transient miss doesn't spam failure notifications.
+            echo "::warning::Backend health did not return 200 (got $http_code) after retries."
+          fi
