@@ -127,12 +127,14 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
       });
       onClose();
     } catch (err: any) {
+      // Keep the modal open so the user can retry; never report a false success.
       toast({
-        title: 'Saved alert settings',
-        description: 'Preferences stored for current session.',
-        type: 'success',
+        title: 'Could Not Save Alerts',
+        description:
+          err?.message ||
+          'The notification service is unreachable. Your subscription was not saved — please try again.',
+        type: 'error',
       });
-      onClose();
     }
   };
 
