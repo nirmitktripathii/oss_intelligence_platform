@@ -79,8 +79,8 @@ High-Throughput Open-Source Issue Intelligence, Triage & Contribution Web Platfo
     # 2. CORS Middleware
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
