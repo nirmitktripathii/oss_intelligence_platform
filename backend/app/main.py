@@ -76,12 +76,12 @@ High-Throughput Open-Source Issue Intelligence, Triage & Contribution Web Platfo
     # 1. OWASP Security Headers Middleware
     application.add_middleware(SecurityHeadersMiddleware)
 
-    # 2. Enterprise-Hardened CORS Middleware (Strict Origin Regex & Preflight Cache)
+    # 2. CORS Middleware (Supports all Vercel domains, previews, and vercel.live)
     application.add_middleware(
         CORSMiddleware,
-        allow_origin_regex=r"^https://([a-zA-Z0-9_-]+\.)?vercel\.app$|^https://(www\.)?gitscout\.(dev|com|app)$|^http://(localhost|127\.0\.0\.1):(3000|8000)$",
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
         allow_headers=["*"],
         max_age=86400,
     )
