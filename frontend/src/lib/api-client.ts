@@ -162,15 +162,11 @@ class ApiClient {
         createdAt: res.created_at || new Date().toISOString(),
       };
     } catch {
-      return {
-        id: `sub_${Date.now()}`,
-        channel: data.channel,
-        destination: data.destination,
-        domains: data.domains,
-        minBountyUsd: data.minBountyUsd,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
+      // Do NOT fabricate a successful subscription. Surface the failure so the
+      // UI can tell the user their alert was not saved.
+      throw new Error(
+        'Could not save your alert subscription — the notification service is unreachable. Please try again shortly.'
+      );
     }
   }
 
