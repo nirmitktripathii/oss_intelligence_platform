@@ -58,6 +58,8 @@ export interface PaginatedIssuesResponse {
   totalPages: number;
   domainCounts?: Record<string, number>;
   totalBountyPoolUsd?: number;
+  /** True when this payload is offline demo/sample data, not the live backend stream. */
+  isDemo?: boolean;
 }
 
 export interface FilterState {
