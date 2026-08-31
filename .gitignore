@@ -1,5 +1,7 @@
 # Environments & Python
 .venv/
+.agents/
+skills-lock.json
 venv/
 ENV/
 env/

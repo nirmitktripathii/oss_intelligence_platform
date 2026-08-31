@@ -19,6 +19,8 @@ class Base(DeclarativeBase):
 connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+elif "postgresql" in settings.DATABASE_URL or "neon.tech" in settings.DATABASE_URL:
+    connect_args = {"ssl": "require"}
 
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
