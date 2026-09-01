@@ -11,7 +11,7 @@ export const SITE_CONFIG = {
   url: 'https://gitscout.dev',
   author: 'GitScout Core Engineering',
   links: {
-    github: 'https://github.com/gitscout/oss-terminal',
+    github: 'https://github.com/nirmitktripathii/oss_intelligence_platform',
     twitter: 'https://twitter.com/gitscout_app',
     discord: 'https://discord.gg/gitscout',
     telegram: 'https://t.me/GitScoutAlertsBot',
