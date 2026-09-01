@@ -58,16 +58,25 @@ class Settings(BaseSettings):
     # ── AI Semantic Triage (LLM enhancement layer) ──
     # Every field is optional. When no provider key is set the triage engine
     # degrades to deterministic AST-only output — it never fabricates an AI result.
-    # Providers are free-tier friendly: Google Gemini / Gemma, Groq (Llama 3.3),
-    # any OpenAI-compatible endpoint, or a local Ollama for development only.
+    # Providers are free-tier friendly: Google Gemini / Gemma, Groq, any
+    # OpenAI-compatible endpoint, or a local Ollama for development only.
     LLM_TRIAGE_ENABLED: bool = True          # master switch; False => always AST-only
     LLM_PROVIDER: Optional[str] = None       # force one of: gemini|groq|openai|ollama (else auto)
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
     LLM_TIMEOUT_SECONDS: float = 20.0
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
 
-    GEMINI_API_KEY: Optional[str] = None     # Google AI Studio free tier (gemini-2.0-flash, gemma-2-27b-it, …)
-    GROQ_API_KEY: Optional[str] = None        # Groq free tier (llama-3.3-70b-versatile, …)
+    # Google AI Studio free tier — all reachable via the same Gemini API. Defaults to
+    # gemini-3.5-flash-lite; set LLM_MODEL to pick another. Free rate limits (RPM/TPM/RPD):
+    #   gemini-3.5-flash-lite  15 / 250,000 / 500
+    #   gemini-3.1-flash-lite  15 / 250,000 / 500
+    #   gemma-4-26b-a4b-it     30 /  16,000 / 14,400   (MoE)
+    #   gemma-4-31b-it         30 /  16,000 / 14,400
+    GEMINI_API_KEY: Optional[str] = None
+    # Groq free tier — Llama 3.3 is NOT offered here; default is openai/gpt-oss-120b
+    # (30 RPM / 8,000 TPM / 200,000 TPD). Other free chat models: openai/gpt-oss-20b,
+    # openai/gpt-oss-safeguard-20b, qwen/qwen3.8-27b, qwen/qwen3.6-27b, groq/compound[-mini].
+    GROQ_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None      # OpenAI or any compatible endpoint
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OLLAMA_BASE_URL: Optional[str] = None     # e.g. http://localhost:11434 — local dev only, never on Render
