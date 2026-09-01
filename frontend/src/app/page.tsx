@@ -1,43 +1,9 @@
 import { IssueExplorer } from '@/components/explorer/issue-explorer';
-import { Terminal, Zap, DollarSign, Target, Activity, Flame, ArrowUpRight } from 'lucide-react';
+import { HeroStats } from '@/components/hero-stats';
+import { Terminal, Flame, ArrowUpRight } from 'lucide-react';
 import Link from 'next/link';
 
 export default function HomePage() {
-  const stats = [
-    {
-      label: 'Live Issues Tracked',
-      value: '139+',
-      change: '+18 today',
-      icon: Activity,
-      color: 'text-emerald-400',
-      bg: 'bg-emerald-500/10 border-emerald-500/20',
-    },
-    {
-      label: 'Active Bounty Pool',
-      value: '$14,250',
-      change: 'Polar & Algora',
-      icon: DollarSign,
-      color: 'text-amber-400',
-      bg: 'bg-amber-500/10 border-amber-500/20',
-    },
-    {
-      label: 'AST File Precision',
-      value: '94.8%',
-      change: 'Graphify Co-Pilot',
-      icon: Target,
-      color: 'text-cyan-400',
-      bg: 'bg-cyan-500/10 border-cyan-500/20',
-    },
-    {
-      label: 'Push Alert Latency',
-      value: '<45s',
-      change: 'Telegram & Discord',
-      icon: Zap,
-      color: 'text-purple-400',
-      bg: 'bg-purple-500/10 border-purple-500/20',
-    },
-  ];
-
   const quickPills = [
     { name: '🔥 High Bounty ($100+)', query: 'hasBounty=true' },
     { name: '🤖 Agentic AI & RAG', query: 'domain=agentic_ai' },
@@ -92,27 +58,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Live Metrics Ticker */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-            {stats.map((stat, i) => {
-              const Icon = stat.icon;
-              return (
-                <div
-                  key={i}
-                  className={`rounded-xl border p-3.5 flex flex-col justify-between ${stat.bg} backdrop-blur-sm transition-all hover:scale-[1.02]`}
-                >
-                  <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                    <span className="text-[11px] font-semibold">{stat.label}</span>
-                    <Icon className={`h-4 w-4 ${stat.color}`} />
-                  </div>
-                  <div className="flex items-baseline justify-between mt-1">
-                    <span className="text-lg sm:text-xl font-extrabold text-foreground">{stat.value}</span>
-                    <span className={`text-[10px] font-bold ${stat.color}`}>{stat.change}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {/* Live Metrics Ticker — real telemetry (open issues, bounty pool) with demo-labeled offline fallback */}
+          <HeroStats />
 
           {/* Quick Filter Pills */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
