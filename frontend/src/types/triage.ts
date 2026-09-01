@@ -38,6 +38,10 @@ export interface TriageReport {
   suggestedPrTitle: string;
   generatedAt: string;
   confidenceScore: number;
+  /** True when a real LLM produced the semantic analysis; false/undefined = deterministic AST-only. */
+  llmEnhanced?: boolean;
+  /** Provider:model that produced the enhancement, e.g. "gemini:gemini-2.0-flash". */
+  provider?: string;
   /** True when this report is an offline illustrative sample, not real backend analysis. */
   isDemo?: boolean;
 }

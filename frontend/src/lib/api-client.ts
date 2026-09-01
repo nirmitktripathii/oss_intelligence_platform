@@ -358,14 +358,27 @@ class ApiClient {
   }
 
   private transformTriageReport(res: any, issueId: string): TriageReport {
+    // The AI enhancement layer, when present, lives under `llm_analysis`. When absent the
+    // report is deterministic AST-only — surface that honestly rather than inventing content.
+    const llm = res.llm_analysis || null;
+    const enhanced = Boolean(res.llm_enhanced);
     return {
       issueId: res.issue_id || issueId,
       summary: res.summary || 'AI diagnostic analysis completed for issue.',
-      rootCauseAnalysis: res.root_cause_analysis || res.rootCauseAnalysis || 'Analysis determined a logic edge-case during execution.',
-      affectedSubsystems: res.affected_subsystems || res.affectedSubsystems || ['Core Engine'],
+      rootCauseAnalysis:
+        (enhanced && llm?.semantic_root_cause) ||
+        res.root_cause_analysis ||
+        res.rootCauseAnalysis ||
+        'Analysis determined a logic edge-case during execution.',
+      // Real subsystems only exist on the AI-enhanced path; leave empty otherwise (no fabrication).
+      affectedSubsystems:
+        (enhanced && Array.isArray(llm?.affected_subsystems) && llm.affected_subsystems) ||
+        res.affected_subsystems ||
+        res.affectedSubsystems ||
+        [],
       localizedFiles: (res.localized_files || res.localizedFiles || []).map((f: any) => ({
         filePath: f.file_path || f.filePath || 'src/index.ts',
-        confidence: f.confidence ?? 0.85,
+        confidence: f.confidence ?? 0,
         reason: f.rationale || f.reason || 'Direct symbol match in stack trace',
         astSymbol: f.ast_symbol || f.astSymbol,
         lineRange: f.line_range || f.lineRange,
@@ -402,7 +415,13 @@ class ApiClient {
       branchingConvention: res.branching_convention || res.branchingConvention || `fix/issue-${issueId.split('#')[1] || 'patch'}`,
       suggestedPrTitle: res.suggested_pr_title || res.suggestedPrTitle || `fix: resolve issue ${issueId}`,
       generatedAt: res.generated_at || res.generatedAt || new Date().toISOString(),
-      confidenceScore: res.confidence_score || res.confidenceScore || 0.94,
+      // Real triage confidence: LLM-calibrated when enhanced, AST-floor otherwise. Never 0.94.
+      confidenceScore:
+        typeof res.triage_confidence === 'number'
+          ? res.triage_confidence
+          : res.confidence_score ?? res.confidenceScore ?? 0,
+      llmEnhanced: enhanced,
+      provider: llm?.provider,
       isDemo: false,
     };
   }
@@ -556,6 +575,7 @@ class ApiClient {
       suggestedPrTitle: `fix(core): resolve boundary overflow for large batch size (#${num})`,
       generatedAt: new Date().toISOString(),
       confidenceScore: 0,
+      llmEnhanced: false,
       isDemo: true,
     };
   }
