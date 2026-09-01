@@ -115,7 +115,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
                 Pricing & ROI
               </Button>
             </Link>
-            <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noreferrer">
+            <a href="https://gitscout-api.onrender.com/docs" target="_blank" rel="noreferrer">
               <Button
                 variant="ghost"
                 size="sm"

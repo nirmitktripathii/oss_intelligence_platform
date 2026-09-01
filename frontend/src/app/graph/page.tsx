@@ -80,7 +80,7 @@ export default function GraphPage() {
             <span className="font-bold text-cyan-400">{activeRepo.data.edges.length}</span>
           </div>
 
-          <a href="http://127.0.0.1:8000/docs" target="_blank" rel="noreferrer">
+          <a href="https://gitscout-api.onrender.com/docs" target="_blank" rel="noreferrer">
             <Button variant="ghost" size="xs" className="text-zinc-400 hover:text-white gap-1 text-[11px]">
               <span>API Specs</span>
               <span className="text-emerald-400">↗</span>
