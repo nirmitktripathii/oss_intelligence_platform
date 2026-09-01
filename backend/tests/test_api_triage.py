@@ -33,7 +33,7 @@ def _force_gemini(monkeypatch, canned_result: dict):
     monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "test-key")
 
     async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
-        return json.dumps(canned_result), "gemini:gemini-2.0-flash"
+        return json.dumps(canned_result), "gemini:gemini-3.5-flash-lite"
 
     monkeypatch.setattr(
         LLMTriageEngine, "query_llm_with_provenance", staticmethod(fake_provenance)
@@ -133,7 +133,7 @@ async def test_triage_ai_enhanced_when_provider_configured(
 
     assert data["llm_enhanced"] is True
     assert data["llm_analysis"]["semantic_root_cause"] == canned["root_cause_summary"]
-    assert data["llm_analysis"]["provider"] == "gemini:gemini-2.0-flash"
+    assert data["llm_analysis"]["provider"] == "gemini:gemini-3.5-flash-lite"
     assert data["llm_analysis"]["affected_subsystems"] == ["Prompt templating"]
     # Real triage confidence is the model's calibrated score, not the AST floor.
     assert data["triage_confidence"] == pytest.approx(0.83)
@@ -167,7 +167,7 @@ async def test_on_demand_triage_ai_enhanced(client: httpx.AsyncClient, monkeypat
 
     assert data["llm_enhanced"] is True
     assert data["triage_confidence"] == pytest.approx(0.71)
-    assert data["llm_analysis"]["provider"] == "gemini:gemini-2.0-flash"
+    assert data["llm_analysis"]["provider"] == "gemini:gemini-3.5-flash-lite"
 
 
 def test_resolve_chain_gating(monkeypatch):
@@ -218,7 +218,7 @@ async def test_triage_grounds_in_real_source(client: httpx.AsyncClient, seed_sam
 
     async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
         captured["prompt"] = prompt
-        return json.dumps(canned), "gemini:gemini-2.0-flash"
+        return json.dumps(canned), "gemini:gemini-3.5-flash-lite"
 
     monkeypatch.setattr(LLMTriageEngine, "query_llm_with_provenance", staticmethod(fake_provenance))
 
@@ -246,7 +246,7 @@ async def test_triage_grounding_degrades_when_source_unavailable(
     canned = {"root_cause_summary": "Diagnosis from issue text alone.", "confidence_score": 0.5}
 
     async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
-        return json.dumps(canned), "gemini:gemini-2.0-flash"
+        return json.dumps(canned), "gemini:gemini-3.5-flash-lite"
 
     monkeypatch.setattr(LLMTriageEngine, "query_llm_with_provenance", staticmethod(fake_provenance))
 

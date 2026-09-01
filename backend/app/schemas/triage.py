@@ -15,7 +15,7 @@ class SemanticAnalysis(BaseModel):
     investigation_entrypoint: Optional[str] = None
     rationale: Optional[str] = None
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0)
-    provider: Optional[str] = Field(None, example="gemini:gemini-2.0-flash")
+    provider: Optional[str] = Field(None, example="gemini:gemini-3.5-flash-lite")
     # Repo files whose real source grounded the analysis (empty => issue-text only).
     grounded_files: List[str] = Field(default_factory=list)
     patch: Optional[Dict[str, Any]] = None
