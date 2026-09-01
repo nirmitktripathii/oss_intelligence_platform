@@ -61,6 +61,7 @@ export const SORT_OPTIONS = [
   { id: 'roi_desc', label: 'Highest Hourly ROI ($/hr)' },
   { id: 'bounty_desc', label: 'Largest Bounty ($ USD)' },
   { id: 'time_asc', label: 'Fastest to Solve' },
+  { id: 'confidence_desc', label: 'Highest AI Confidence' },
 ];
 
 export const PRICING_PLANS: PricingPlan[] = [
