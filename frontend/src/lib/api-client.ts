@@ -422,6 +422,7 @@ class ApiClient {
           : res.confidence_score ?? res.confidenceScore ?? 0,
       llmEnhanced: enhanced,
       provider: llm?.provider,
+      groundedFiles: Array.isArray(llm?.grounded_files) ? llm.grounded_files : [],
       isDemo: false,
     };
   }

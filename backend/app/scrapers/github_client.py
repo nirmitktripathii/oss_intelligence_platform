@@ -1,5 +1,6 @@
 """Async GitHub REST & Search API Client with ETag caching and rate limit handling."""
 
+import base64
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 import httpx
@@ -183,6 +184,45 @@ class GitHubClient:
                 return []
         except Exception:
             return []
+
+    async def fetch_file_content(
+        self,
+        owner: str,
+        repo: str,
+        path: str,
+        ref: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Fetch a single file's decoded UTF-8 text via the GitHub Contents API
+        (default branch unless ``ref`` given). Returns None on 404 / rate limit /
+        directory / binary / oversized-without-download — callers degrade gracefully.
+        """
+        url = f"{self.base_url}/repos/{owner}/{repo}/contents/{path}"
+        params = {"ref": ref} if ref else {}
+        headers = self._build_headers()
+        try:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+                resp = await client.get(url, params=params, headers=headers)
+                if resp.status_code != 200:
+                    return None
+                data = resp.json()
+                # A directory returns a list; we only ground on individual files.
+                if not isinstance(data, dict):
+                    return None
+                if data.get("encoding") == "base64" and data.get("content"):
+                    try:
+                        return base64.b64decode(data["content"]).decode("utf-8", errors="replace")
+                    except Exception:
+                        return None
+                # Files >1MB omit inline content; fall back to the raw download URL.
+                download_url = data.get("download_url")
+                if download_url:
+                    raw = await client.get(download_url)
+                    if raw.status_code == 200:
+                        return raw.text
+        except Exception as exc:
+            logger.debug(f"Contents fetch failed for {owner}/{repo}/{path}: {exc}")
+        return None
 
     async def get_rate_limit_status(self) -> Dict[str, Any]:
         """Check current GitHub API quota status."""

@@ -42,6 +42,8 @@ export interface TriageReport {
   llmEnhanced?: boolean;
   /** Provider:model that produced the enhancement, e.g. "gemini:gemini-2.0-flash". */
   provider?: string;
+  /** Repo files whose real source grounded the analysis (empty => issue-text only). */
+  groundedFiles?: string[];
   /** True when this report is an offline illustrative sample, not real backend analysis. */
   isDemo?: boolean;
 }

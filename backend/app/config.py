@@ -72,6 +72,13 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OLLAMA_BASE_URL: Optional[str] = None     # e.g. http://localhost:11434 — local dev only, never on Render
 
+    # Real-code grounding: fetch the localized file's actual source (GitHub Contents API,
+    # reuses GITHUB_TOKEN) and feed it to the LLM so diagnoses are grounded, not guessed.
+    LLM_GROUND_IN_SOURCE: bool = True
+    LLM_GROUND_MAX_FILES: int = 2             # how many top localized files to fetch
+    LLM_SOURCE_MAX_CHARS: int = 6000          # total injected source budget (bounds prompt size)
+    GITHUB_FILE_CACHE_TTL_SECONDS: int = 86400
+
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None

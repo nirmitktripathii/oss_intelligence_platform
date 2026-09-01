@@ -35,6 +35,7 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
   const enhanced = Boolean(report?.llmEnhanced);
   const provider = report?.provider;
   const confidencePct = Math.round((report?.confidenceScore ?? 0) * 100);
+  const groundedFiles = report?.groundedFiles ?? [];
 
   const handleCopy = async (text: string, type: 'branch' | 'title') => {
     try {
@@ -123,6 +124,16 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
               : 'Localized deterministically from stack traces & AST symbols'}
           </span>
         </div>
+
+        {enhanced && groundedFiles.length > 0 && (
+          <div className="flex items-start gap-2 text-[11px] text-emerald-300/90">
+            <FileText className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+            <span>
+              Grounded in real source:{' '}
+              <span className="font-semibold text-emerald-200">{groundedFiles.join(', ')}</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 2. Affected Subsystems & Blast Radius */}
