@@ -6,6 +6,7 @@ import pytest
 import httpx
 
 from app.config import settings as app_settings
+from app.scrapers.github_client import GitHubClient
 from app.triage.llm_engine import LLMTriageEngine
 
 _LLM_KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "OLLAMA_BASE_URL")
@@ -17,9 +18,18 @@ def _force_ast_only(monkeypatch):
         monkeypatch.setattr(app_settings, key, None)
 
 
+def _stub_no_source(monkeypatch):
+    """Stub GitHub source fetching so enhancement tests never hit the network."""
+    async def _none(self, owner, repo, path, ref=None):
+        return None
+
+    monkeypatch.setattr(GitHubClient, "fetch_file_content", _none)
+
+
 def _force_gemini(monkeypatch, canned_result: dict):
     """Configure a provider and stub the transport so the real enhancement path runs."""
     _force_ast_only(monkeypatch)
+    _stub_no_source(monkeypatch)  # keep hermetic; grounding tests override this
     monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "test-key")
 
     async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
@@ -184,3 +194,65 @@ def test_coerce_json_tolerates_fences_and_prose():
     assert LLMTriageEngine._coerce_json('```json\n{"a": 1}\n```') == {"a": 1}
     assert LLMTriageEngine._coerce_json('Here you go: {"a": 2} done') == {"a": 2}
     assert LLMTriageEngine._coerce_json("not json at all") is None
+
+
+# ── Real-code grounding (#2) ────────────────────────────────────────────────── #
+
+
+@pytest.mark.asyncio
+async def test_triage_grounds_in_real_source(client: httpx.AsyncClient, seed_sample_issues, monkeypatch):
+    """The fetched repository source is injected into the prompt and recorded as grounded."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(app_settings, "LLM_GROUND_IN_SOURCE", True)
+
+    fake_source = "def format_messages(self, **kwargs):\n    return self.tpl.format(**kwargs)  # MARKER no None guard"
+
+    async def fake_fetch(self, owner, repo, path, ref=None):
+        return fake_source
+
+    monkeypatch.setattr(GitHubClient, "fetch_file_content", fake_fetch)
+
+    captured = {}
+    canned = {"root_cause_summary": "None reaches .format() unguarded.", "confidence_score": 0.8}
+
+    async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
+        captured["prompt"] = prompt
+        return json.dumps(canned), "gemini:gemini-2.0-flash"
+
+    monkeypatch.setattr(LLMTriageEngine, "query_llm_with_provenance", staticmethod(fake_provenance))
+
+    response = await client.get("/api/v1/triage/langchain-ai/langchain%232002")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["llm_enhanced"] is True
+    # Real source made it into the prompt sent to the model.
+    assert "MARKER no None guard" in captured["prompt"]
+    # And the grounded file is surfaced in the response.
+    assert len(data["llm_analysis"]["grounded_files"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_triage_grounding_degrades_when_source_unavailable(
+    client: httpx.AsyncClient, seed_sample_issues, monkeypatch
+):
+    """When no source can be fetched, the report is still enhanced but grounded_files is empty."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr(app_settings, "LLM_GROUND_IN_SOURCE", True)
+    _stub_no_source(monkeypatch)  # every fetch returns None
+
+    canned = {"root_cause_summary": "Diagnosis from issue text alone.", "confidence_score": 0.5}
+
+    async def fake_provenance(prompt, system_prompt=None, temperature=0.2):
+        return json.dumps(canned), "gemini:gemini-2.0-flash"
+
+    monkeypatch.setattr(LLMTriageEngine, "query_llm_with_provenance", staticmethod(fake_provenance))
+
+    response = await client.get("/api/v1/triage/kubernetes/kubernetes%234004")
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["llm_enhanced"] is True
+    assert data["llm_analysis"]["grounded_files"] == []

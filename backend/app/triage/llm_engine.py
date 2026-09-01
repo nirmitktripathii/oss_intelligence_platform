@@ -50,6 +50,12 @@ Description:
 [AST LOCALIZED CANDIDATE FILES]
 {localized_files_json}
 
+[GROUNDED SOURCE CODE]
+Actual source fetched from the repository around the localized lines (line-numbered).
+Base your diagnosis, file references, and any line numbers strictly on THIS code. If this
+section is empty, say the analysis is based on the issue text alone and lower your confidence.
+{source_context}
+
 [OUTPUT FORMAT]
 Respond in valid JSON. Set "confidence_score" to your genuine calibrated certainty in the
 root-cause identification on a 0.0-1.0 scale — low when the issue text is vague or no stack
@@ -327,10 +333,12 @@ class LLMTriageEngine:
         language: str,
         tech_stack: List[str],
         localized_files: List[Dict[str, Any]],
+        source_context: str = "",
     ) -> Optional[Dict[str, Any]]:
         """
         Invoke the LLM with ROOT_CAUSE_PROMPT_TEMPLATE and return the parsed result
         stamped with the ``_provider`` that produced it, or ``None`` to keep AST-only.
+        ``source_context`` is the real repository code fetched for grounding (may be empty).
         """
         prompt = ROOT_CAUSE_PROMPT_TEMPLATE.format(
             repo_owner=repo_owner,
@@ -341,6 +349,7 @@ class LLMTriageEngine:
             title=title,
             body=(body or "")[:2000],
             localized_files_json=json.dumps(localized_files, indent=2),
+            source_context=source_context.strip() or "(no source could be fetched for the localized files)",
         )
         result = await cls.query_llm_with_provenance(prompt)
         if not result:
