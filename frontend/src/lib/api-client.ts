@@ -20,6 +20,50 @@ function resolveApiBase(rawUrl?: string): string {
 
 const API_BASE = resolveApiBase();
 
+/**
+ * Frontend filter ids -> backend query contract.
+ *
+ * The backend validates `domain` and `difficulty` as strict string enums
+ * (backend/app/schemas/issue.py). Sending the UI's lowercase ids (e.g. `ai_ml`,
+ * `easy`) yields a 422 that would otherwise be swallowed and collapse the whole
+ * explorer into offline demo data. These maps MUST stay in lockstep with the
+ * backend enums.
+ */
+const DOMAIN_TO_BACKEND: Record<string, string> = {
+  ai_ml: 'AI/ML',
+  data: 'Data',
+  web: 'Web',
+  cloud_devops: 'Cloud/DevOps',
+  security: 'Security',
+  systems: 'Systems',
+};
+
+const DIFFICULTY_TO_BACKEND: Record<string, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+  // Legacy aliases that may still appear in older FilterState values.
+  good_first_issue: 'Easy',
+  intermediate: 'Medium',
+  advanced: 'Hard',
+};
+
+/** Frontend sort ids -> backend `sort_by` values (see issues.py). */
+const SORT_TO_BACKEND: Record<string, string> = {
+  created_desc: 'newest',
+  roi_desc: 'hourly_roi',
+  bounty_desc: 'bounty_desc',
+  time_asc: 'time_asc',
+};
+
+/** timeToSolve bucket -> estimated-effort window (hours) on Issue.estimated_hours. */
+const TIME_TO_SOLVE_HOURS: Record<string, { min?: number; max?: number }> = {
+  lt_30m: { max: 0.5 },
+  '30m_2h': { min: 0.5, max: 2 },
+  '2h_6h': { min: 2, max: 6 },
+  gt_6h: { min: 6 },
+};
+
 class ApiClient {
   private baseUrl: string;
 
@@ -69,12 +113,21 @@ class ApiClient {
   async getIssues(params?: Partial<FilterState>): Promise<PaginatedIssuesResponse> {
     try {
       const query = new URLSearchParams();
-      if (params?.domain && params.domain !== 'all') query.set('domain', params.domain);
-      if (params?.difficulty && params.difficulty !== 'all') query.set('difficulty', params.difficulty);
+      if (params?.domain && params.domain !== 'all') {
+        query.set('domain', DOMAIN_TO_BACKEND[params.domain] ?? params.domain);
+      }
+      if (params?.difficulty && params.difficulty !== 'all') {
+        query.set('difficulty', DIFFICULTY_TO_BACKEND[params.difficulty] ?? params.difficulty);
+      }
       if (params?.hasBountyOnly) query.set('has_bounty', 'true');
       if (params?.minBounty && params.minBounty > 0) query.set('min_bounty', String(params.minBounty));
+      if (params?.timeToSolve && params.timeToSolve !== 'all') {
+        const window = TIME_TO_SOLVE_HOURS[params.timeToSolve];
+        if (window?.min !== undefined) query.set('min_hours', String(window.min));
+        if (window?.max !== undefined) query.set('max_hours', String(window.max));
+      }
       if (params?.search) query.set('search', params.search);
-      if (params?.sortBy) query.set('sort_by', params.sortBy);
+      if (params?.sortBy) query.set('sort_by', SORT_TO_BACKEND[params.sortBy] ?? 'newest');
       if (params?.page) query.set('page', String(params.page));
       if (params?.pageSize) query.set('page_size', String(params.pageSize));
       if (params?.techStack && params.techStack.length > 0) {
@@ -400,8 +453,6 @@ class ApiClient {
         filtered.sort((a, b) => (b.bounty?.amountUsd || 0) - (a.bounty?.amountUsd || 0));
       } else if (params.sortBy === 'time_asc') {
         filtered.sort((a, b) => a.estimatedMinutesToSolve - b.estimatedMinutesToSolve);
-      } else if (params.sortBy === 'confidence_desc') {
-        filtered.sort((a, b) => b.confidenceScore - a.confidenceScore);
       } else {
         filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       }

@@ -70,7 +70,7 @@ export interface FilterState {
   minBounty: number;
   timeToSolve: 'all' | 'lt_30m' | '30m_2h' | '2h_6h' | 'gt_6h';
   search: string;
-  sortBy: 'created_desc' | 'bounty_desc' | 'roi_desc' | 'time_asc' | 'confidence_desc';
+  sortBy: 'created_desc' | 'bounty_desc' | 'roi_desc' | 'time_asc';
   page: number;
   pageSize: number;
   viewMode: ViewMode;

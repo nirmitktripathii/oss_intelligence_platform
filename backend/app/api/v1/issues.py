@@ -24,10 +24,12 @@ async def list_issues(
     tech_stack: Optional[str] = Query(None, description="Filter by tech stack tag (e.g. 'Python', 'React')"),
     has_bounty: Optional[bool] = Query(None, description="Filter for issues with funded bounties"),
     min_bounty: Optional[float] = Query(None, ge=0.0, description="Minimum bounty USD amount"),
+    min_hours: Optional[float] = Query(None, ge=0.0, description="Minimum estimated effort (hours)"),
+    max_hours: Optional[float] = Query(None, ge=0.0, description="Maximum estimated effort (hours)"),
     search: Optional[str] = Query(None, description="Keyword search in title, body, and repository name"),
     sort_by: Optional[str] = Query(
         "newest",
-        description="Sort by: newest, oldest, hourly_roi, bounty_desc, comments",
+        description="Sort by: newest, oldest, hourly_roi, bounty_desc, time_asc, comments",
     ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -53,6 +55,12 @@ async def list_issues(
     if min_bounty is not None and min_bounty > 0:
         query = query.where(Issue.bounty_amount_usd >= min_bounty)
 
+    # Estimated effort window (drives the "time to solve" facet)
+    if min_hours is not None:
+        query = query.where(Issue.estimated_hours >= min_hours)
+    if max_hours is not None:
+        query = query.where(Issue.estimated_hours <= max_hours)
+
     # Search keyword
     if search and search.strip():
         term = f"%{search.strip()}%"
@@ -65,37 +73,40 @@ async def list_issues(
             )
         )
 
-    # Count total
-    count_query = select(func.count()).select_from(query.subquery())
-    total_result = await db.execute(count_query)
-    total = total_result.scalar() or 0
-
-    # Sorting
+    # Sorting (applied before pagination)
     if sort_by == "oldest":
         query = query.order_by(Issue.github_created_at.asc())
     elif sort_by == "hourly_roi":
         query = query.order_by(desc(Issue.hourly_roi), desc(Issue.bounty_amount_usd))
     elif sort_by == "bounty_desc":
         query = query.order_by(desc(Issue.bounty_amount_usd))
+    elif sort_by == "time_asc":
+        query = query.order_by(Issue.estimated_hours.asc(), desc(Issue.github_created_at))
     elif sort_by == "comments":
         query = query.order_by(desc(Issue.comments_count))
     else:  # "newest" default
         query = query.order_by(desc(Issue.github_created_at))
 
-    # Pagination
     offset = (page - 1) * page_size
-    query = query.offset(offset).limit(page_size)
 
-    result = await db.execute(query)
-    issues = result.scalars().all()
-
-    # Filter tech_stack in Python if specified (for JSON list column compatibility across DBs)
     if tech_stack:
-        ts_lower = tech_stack.lower()
-        filtered = [
-            i for i in issues if any(ts_lower in s.lower() for s in (i.tech_stack or []))
+        # tech_stack is a JSON list column; filter in Python for cross-DB portability.
+        # This must run BEFORE counting/paginating so `total` and `total_pages` are
+        # accurate. Comma-separated values match ANY tag (e.g. "Python,Rust").
+        wanted = [t.strip().lower() for t in tech_stack.split(",") if t.strip()]
+        all_rows = (await db.execute(query)).scalars().all()
+        matched = [
+            i
+            for i in all_rows
+            if any(w in s.lower() for s in (i.tech_stack or []) for w in wanted)
         ]
-        issues = filtered
+        total = len(matched)
+        issues = matched[offset : offset + page_size]
+    else:
+        count_query = select(func.count()).select_from(query.subquery())
+        total = (await db.execute(count_query)).scalar() or 0
+        result = await db.execute(query.offset(offset).limit(page_size))
+        issues = result.scalars().all()
 
     total_pages = math.ceil(total / page_size) if total > 0 else 1
 
