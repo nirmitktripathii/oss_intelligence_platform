@@ -47,7 +47,7 @@ class TriageReport(Base):
     # True only when a real LLM enrichment was produced and persisted.
     llm_enhanced: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
     # Structured LLM output: semantic_root_cause, affected_subsystems, investigation_entrypoint,
-    # rationale, confidence_score, provider (e.g. "gemini:gemini-2.0-flash"), and later a grounded patch.
+    # rationale, confidence_score, provider (e.g. "gemini:gemini-3.5-flash-lite"), and later a grounded patch.
     llm_analysis: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     # Real, sortable confidence: the LLM's calibrated score when enhanced, else the top AST
     # localization confidence. Never a hardcoded placeholder. Indexed for the confidence sort.

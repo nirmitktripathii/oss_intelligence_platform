@@ -126,9 +126,12 @@ class LLMTriageEngine:
     """
 
     # Default model per provider (all reachable on a free tier). Override with LLM_MODEL.
+    # Gemini/Gemma default to the free-tier flash-lite; other free Gemma options via the
+    # same Gemini API: gemini-3.1-flash-lite, gemma-4-26b-a4b-it, gemma-4-31b-it. Groq's
+    # free tier does not carry Llama 3.3, so default to an available general model.
     PROVIDER_DEFAULTS: Dict[str, str] = {
-        "gemini": "gemini-2.0-flash",
-        "groq": "llama-3.3-70b-versatile",
+        "gemini": "gemini-3.5-flash-lite",
+        "groq": "openai/gpt-oss-120b",
         "openai": "gpt-4o-mini",
         "ollama": "llama3.2",
     }
