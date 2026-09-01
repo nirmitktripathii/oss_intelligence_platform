@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Copy,
   Check,
+  Cpu,
 } from 'lucide-react';
 
 interface ProblemBreakdownProps {
@@ -29,6 +30,11 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
 
   const branchName = report?.branchingConvention || `fix/issue-${issue.githubIssueNumber}`;
   const prTitle = report?.suggestedPrTitle || `fix: resolve issue #${issue.githubIssueNumber}`;
+
+  // Provenance: was this a real LLM enhancement, or the deterministic AST floor?
+  const enhanced = Boolean(report?.llmEnhanced);
+  const provider = report?.provider;
+  const confidencePct = Math.round((report?.confidenceScore ?? 0) * 100);
 
   const handleCopy = async (text: string, type: 'branch' | 'title') => {
     try {
@@ -69,28 +75,39 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
     ];
   }, [report?.contributingGuidelinesSummary]);
 
-  // Safe subsystems normalization
+  // Real subsystems only — no fabricated defaults. Empty on the deterministic AST path.
   const subsystems: string[] = React.useMemo(() => {
-    if (Array.isArray(report?.affectedSubsystems) && report.affectedSubsystems.length > 0) {
-      return report.affectedSubsystems;
-    }
-    return ['Core Engine', 'Routing Layer', 'Unit Test Suite'];
+    return Array.isArray(report?.affectedSubsystems) ? report.affectedSubsystems : [];
   }, [report?.affectedSubsystems]);
 
   return (
     <div className="space-y-4 font-mono text-xs text-zinc-300">
       {/* 1. AI Diagnostic & Root Cause Card */}
       <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-zinc-900/60 to-zinc-950 p-5 shadow-xl space-y-3.5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
             <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-emerald-500/20 text-emerald-400">
               <Sparkles className="h-3.5 w-3.5" />
             </span>
             <span>AI Diagnostic & Root Cause Breakdown</span>
           </div>
-          <Badge variant="emerald" className="text-[11px] font-bold px-2.5 py-0.5 shadow-sm">
-            {Math.round((report?.confidenceScore || 0.94) * 100)}% Confidence
+          <Badge variant="emerald" className="text-[11px] font-bold px-2.5 py-0.5 shadow-sm shrink-0">
+            {confidencePct}% Confidence
           </Badge>
+        </div>
+
+        {/* Provenance — honest about whether a real model ran or this is the deterministic floor */}
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
+              enhanced
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                : 'border-zinc-700 bg-zinc-900 text-zinc-400'
+            }`}
+          >
+            {enhanced ? <Sparkles className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
+            {enhanced ? `AI-enhanced${provider ? ` · ${provider}` : ''}` : 'Deterministic AST'}
+          </span>
         </div>
 
         <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-sans font-normal tracking-wide">
@@ -100,7 +117,11 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
 
         <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/80 text-[11px] text-zinc-400">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-          <span>Validated against upstream AST call graphs and commit history</span>
+          <span>
+            {enhanced
+              ? `Semantic analysis via ${provider ?? 'LLM'} over AST-localized candidate files`
+              : 'Localized deterministically from stack traces & AST symbols'}
+          </span>
         </div>
       </div>
 
@@ -113,17 +134,24 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
           <span>Affected Subsystems & Blast Radius</span>
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {subsystems.map((sub) => (
-            <span
-              key={sub}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200 font-semibold shadow-sm"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
-              <span>{sub}</span>
-            </span>
-          ))}
-        </div>
+        {subsystems.length > 0 ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {subsystems.map((sub) => (
+              <span
+                key={sub}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200 font-semibold shadow-sm"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                <span>{sub}</span>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] text-zinc-500 pt-1 font-sans leading-relaxed">
+            Subsystem mapping is produced by AI-enhanced triage. This report used deterministic AST
+            localization — the localized files below trace the blast radius.
+          </p>
+        )}
       </div>
 
       {/* 3. Upstream CONTRIBUTING Guidelines */}

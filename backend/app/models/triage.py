@@ -3,7 +3,9 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from sqlalchemy import (
+    Boolean,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     JSON,
@@ -40,7 +42,17 @@ class TriageReport(Base):
     # Step-by-step fix plan conforming to CONTRIBUTING.md
     fix_plan_steps: Mapped[List[Dict[str, Any]]] = mapped_column(JSON, default=list, nullable=False)
     contributing_guidelines_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    
+
+    # ── AI semantic enhancement layer (nullable: absent => deterministic AST-only) ──
+    # True only when a real LLM enrichment was produced and persisted.
+    llm_enhanced: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
+    # Structured LLM output: semantic_root_cause, affected_subsystems, investigation_entrypoint,
+    # rationale, confidence_score, provider (e.g. "gemini:gemini-2.0-flash"), and later a grounded patch.
+    llm_analysis: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    # Real, sortable confidence: the LLM's calibrated score when enhanced, else the top AST
+    # localization confidence. Never a hardcoded placeholder. Indexed for the confidence sort.
+    triage_confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
@@ -59,6 +71,9 @@ class TriageReport(Base):
             "reproduction_instructions": self.reproduction_instructions,
             "fix_plan_steps": self.fix_plan_steps or [],
             "contributing_guidelines_summary": self.contributing_guidelines_summary,
+            "llm_enhanced": bool(self.llm_enhanced),
+            "llm_analysis": self.llm_analysis or None,
+            "triage_confidence": self.triage_confidence,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

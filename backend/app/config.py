@@ -55,6 +55,23 @@ class Settings(BaseSettings):
     DEFAULT_REPO_LIMIT: int = 20
     ENABLE_BACKGROUND_CRAWLER: bool = False
 
+    # ── AI Semantic Triage (LLM enhancement layer) ──
+    # Every field is optional. When no provider key is set the triage engine
+    # degrades to deterministic AST-only output — it never fabricates an AI result.
+    # Providers are free-tier friendly: Google Gemini / Gemma, Groq (Llama 3.3),
+    # any OpenAI-compatible endpoint, or a local Ollama for development only.
+    LLM_TRIAGE_ENABLED: bool = True          # master switch; False => always AST-only
+    LLM_PROVIDER: Optional[str] = None       # force one of: gemini|groq|openai|ollama (else auto)
+    LLM_MODEL: Optional[str] = None          # override the per-provider default model id
+    LLM_TIMEOUT_SECONDS: float = 20.0
+    LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
+
+    GEMINI_API_KEY: Optional[str] = None     # Google AI Studio free tier (gemini-2.0-flash, gemma-2-27b-it, …)
+    GROQ_API_KEY: Optional[str] = None        # Groq free tier (llama-3.3-70b-versatile, …)
+    OPENAI_API_KEY: Optional[str] = None      # OpenAI or any compatible endpoint
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OLLAMA_BASE_URL: Optional[str] = None     # e.g. http://localhost:11434 — local dev only, never on Render
+
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
