@@ -57,11 +57,10 @@ export const TIME_TO_SOLVE_OPTIONS = [
 ];
 
 export const SORT_OPTIONS = [
+  { id: 'created_desc', label: 'Newest Issues' },
   { id: 'roi_desc', label: 'Highest Hourly ROI ($/hr)' },
   { id: 'bounty_desc', label: 'Largest Bounty ($ USD)' },
-  { id: 'created_desc', label: 'Newest Issues' },
   { id: 'time_asc', label: 'Fastest to Solve' },
-  { id: 'confidence_desc', label: 'Highest AI Confidence' },
 ];
 
 export const PRICING_PLANS: PricingPlan[] = [
@@ -315,7 +314,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'A high-throughput and memory-efficient LLM inference and serving engine',
     },
     domain: 'ai_ml',
-    difficulty: 'intermediate',
+    difficulty: 'medium',
     estimatedMinutesToSolve: 90,
     effortHours: 1.5,
     techStack: ['Python', 'C++', 'CUDA', 'PyTorch'],
@@ -352,7 +351,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'An in-process SQL OLAP database management system',
     },
     domain: 'data',
-    difficulty: 'intermediate',
+    difficulty: 'medium',
     estimatedMinutesToSolve: 120,
     effortHours: 2.0,
     techStack: ['C++', 'SQL', 'Parquet'],
@@ -389,7 +388,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'Fast and low overhead web framework, for Node.js',
     },
     domain: 'web',
-    difficulty: 'good_first_issue',
+    difficulty: 'easy',
     estimatedMinutesToSolve: 45,
     effortHours: 0.75,
     techStack: ['TypeScript', 'Node.js', 'HTTP/2'],
@@ -426,7 +425,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'Find vulnerabilities, misconfigurations, secrets, SBOM in containers, Kubernetes, code',
     },
     domain: 'security',
-    difficulty: 'intermediate',
+    difficulty: 'medium',
     estimatedMinutesToSolve: 150,
     effortHours: 2.5,
     techStack: ['Go', 'Docker', 'SBOM', 'CycloneDX'],
@@ -463,7 +462,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'A runtime for writing reliable, asynchronous, and slim applications with the Rust programming language.',
     },
     domain: 'systems',
-    difficulty: 'advanced',
+    difficulty: 'hard',
     estimatedMinutesToSolve: 240,
     effortHours: 4.0,
     techStack: ['Rust', 'Async', 'Atomics', 'Concurrency'],
@@ -500,7 +499,7 @@ export const SAMPLE_FALLBACK_ISSUES: Issue[] = [
       description: 'Production-Grade Container Scheduling and Management',
     },
     domain: 'cloud_devops',
-    difficulty: 'advanced',
+    difficulty: 'hard',
     estimatedMinutesToSolve: 300,
     effortHours: 5.0,
     techStack: ['Go', 'Kubernetes', 'Linux', 'cgroups'],

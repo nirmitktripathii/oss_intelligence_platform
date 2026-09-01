@@ -85,6 +85,66 @@ async def test_sort_issues_by_hourly_roi(client: httpx.AsyncClient, seed_sample_
 
 
 @pytest.mark.asyncio
+async def test_sort_issues_by_time_asc(client: httpx.AsyncClient, seed_sample_issues):
+    """Sort issues by fastest-to-solve (ascending estimated effort)."""
+    response = await client.get("/api/v1/issues?sort_by=time_asc")
+    assert response.status_code == 200
+    items = response.json()["items"]
+    # langchain (0.75h) < fastapi (2.5h) < k8s (3.0h) < polars (8.0h)
+    assert items[0]["id"] == "langchain-ai/langchain#2002"
+    assert items[-1]["id"] == "pola-rs/polars#3003"
+    hours = [i["estimated_hours"] for i in items]
+    assert hours == sorted(hours)
+
+
+@pytest.mark.asyncio
+async def test_filter_issues_max_hours(client: httpx.AsyncClient, seed_sample_issues):
+    """Filter to short tasks via the estimated-effort ceiling."""
+    response = await client.get("/api/v1/issues?max_hours=1")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == "langchain-ai/langchain#2002"
+
+
+@pytest.mark.asyncio
+async def test_filter_issues_hours_window(client: httpx.AsyncClient, seed_sample_issues):
+    """Filter to a 2h-6h effort window (min + max hours together)."""
+    response = await client.get("/api/v1/issues?min_hours=2&max_hours=6")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 2
+    ids = {i["id"] for i in data["items"]}
+    assert ids == {"fastapi/fastapi#1001", "kubernetes/kubernetes#4004"}
+
+
+@pytest.mark.asyncio
+async def test_filter_issues_tech_stack_multi(client: httpx.AsyncClient, seed_sample_issues):
+    """A comma-separated tech_stack matches ANY tag, and totals stay accurate."""
+    response = await client.get("/api/v1/issues?tech_stack=Python,Rust")
+    assert response.status_code == 200
+    data = response.json()
+    # Python -> fastapi + langchain; Rust -> polars. k8s (Go) excluded.
+    assert data["total"] == 3
+    ids = {i["id"] for i in data["items"]}
+    assert ids == {
+        "fastapi/fastapi#1001",
+        "langchain-ai/langchain#2002",
+        "pola-rs/polars#3003",
+    }
+
+
+@pytest.mark.asyncio
+async def test_filter_issues_tech_stack_single(client: httpx.AsyncClient, seed_sample_issues):
+    """A single tech_stack tag still filters correctly."""
+    response = await client.get("/api/v1/issues?tech_stack=Kubernetes")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["id"] == "kubernetes/kubernetes#4004"
+
+
+@pytest.mark.asyncio
 async def test_get_single_issue_success(client: httpx.AsyncClient, seed_sample_issues):
     """Retrieve an existing issue by composite ID."""
     response = await client.get("/api/v1/issues/fastapi/fastapi%231001")
