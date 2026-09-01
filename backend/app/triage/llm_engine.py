@@ -51,11 +51,14 @@ Description:
 {localized_files_json}
 
 [OUTPUT FORMAT]
-Respond in valid JSON:
+Respond in valid JSON. Set "confidence_score" to your genuine calibrated certainty in the
+root-cause identification on a 0.0-1.0 scale — low when the issue text is vague or no stack
+trace / file reference was provided, high only when the evidence is strong. Never default to a
+fixed number.
 {{
     "root_cause_summary": "Concise 2-3 sentence technical diagnosis of why the bug occurs.",
     "affected_subsystems": ["Subsystem 1", "Subsystem 2"],
-    "confidence_score": 0.94,
+    "confidence_score": 0.0,
     "investigation_entrypoint": "path/to/primary/file.py",
     "rationale": "Why this specific file/function is the root cause."
 }}
@@ -109,7 +112,198 @@ Respond in valid JSON:
 # ==============================================================================
 
 class LLMTriageEngine:
-    """Invokes LLM providers with fallback to deterministic AST templates."""
+    """
+    Invokes a free-tier-friendly LLM provider as an *enhancement layer* over the
+    deterministic AST triage. Provider and model are configuration-driven; when no
+    provider is configured every method returns ``None`` so callers keep the
+    deterministic result rather than fabricating one.
+    """
+
+    # Default model per provider (all reachable on a free tier). Override with LLM_MODEL.
+    PROVIDER_DEFAULTS: Dict[str, str] = {
+        "gemini": "gemini-2.0-flash",
+        "groq": "llama-3.3-70b-versatile",
+        "openai": "gpt-4o-mini",
+        "ollama": "llama3.2",
+    }
+
+    # ------------------------------------------------------------------ #
+    # Provider resolution
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def _provider_available(cls, provider: str) -> bool:
+        if provider == "gemini":
+            return bool(getattr(settings, "GEMINI_API_KEY", None))
+        if provider == "groq":
+            return bool(getattr(settings, "GROQ_API_KEY", None))
+        if provider == "openai":
+            return bool(getattr(settings, "OPENAI_API_KEY", None))
+        if provider == "ollama":
+            return bool(getattr(settings, "OLLAMA_BASE_URL", None))
+        return False
+
+    @classmethod
+    def resolve_chain(cls) -> List[tuple]:
+        """
+        Ordered list of ``(provider, model)`` to attempt. Respects a forced
+        ``LLM_PROVIDER`` if set and available, otherwise auto-selects every
+        configured provider (Ollama last, and only when its URL is set — so the
+        old unconditional localhost probe never runs on a deployed backend).
+        """
+        if not getattr(settings, "LLM_TRIAGE_ENABLED", True):
+            return []
+        model_override = getattr(settings, "LLM_MODEL", None)
+        forced = (getattr(settings, "LLM_PROVIDER", None) or "").strip().lower()
+        order = [forced] if forced in cls.PROVIDER_DEFAULTS else ["gemini", "groq", "openai", "ollama"]
+        chain: List[tuple] = []
+        for provider in order:
+            if cls._provider_available(provider):
+                chain.append((provider, model_override or cls.PROVIDER_DEFAULTS[provider]))
+        return chain
+
+    @classmethod
+    def active_provider_label(cls) -> Optional[str]:
+        """Human-readable label of the provider that would serve a request, or None."""
+        chain = cls.resolve_chain()
+        return f"{chain[0][0]}:{chain[0][1]}" if chain else None
+
+    # ------------------------------------------------------------------ #
+    # Robust JSON coercion (models sometimes wrap output in prose/fences)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _coerce_json(text: Optional[str]) -> Optional[Dict[str, Any]]:
+        if not text:
+            return None
+        candidate = text.strip()
+        # Strip ```json ... ``` / ``` ... ``` fences if present
+        if candidate.startswith("```"):
+            candidate = candidate.split("```", 2)[1] if candidate.count("```") >= 2 else candidate
+            if candidate.lstrip().lower().startswith("json"):
+                candidate = candidate.lstrip()[4:]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+        # Fallback: extract the first balanced {...} object
+        start = candidate.find("{")
+        end = candidate.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return json.loads(candidate[start : end + 1])
+            except Exception:
+                return None
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Provider transports
+    # ------------------------------------------------------------------ #
+    @classmethod
+    async def _call_openai_compatible(
+        cls, provider: str, model: str, system_prompt: str, prompt: str, temperature: float
+    ) -> Optional[str]:
+        if provider == "groq":
+            base_url, key = "https://api.groq.com/openai/v1", getattr(settings, "GROQ_API_KEY", None)
+        else:
+            base_url = getattr(settings, "OPENAI_BASE_URL", "https://api.openai.com/v1")
+            key = getattr(settings, "OPENAI_API_KEY", None)
+        if not key:
+            return None
+        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": temperature,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json()["choices"][0]["message"]["content"]
+            logger.warning("[LLM] %s returned HTTP %s", provider, resp.status_code)
+        return None
+
+    @classmethod
+    async def _call_gemini(
+        cls, model: str, system_prompt: str, prompt: str, temperature: float
+    ) -> Optional[str]:
+        key = getattr(settings, "GEMINI_API_KEY", None)
+        if not key:
+            return None
+        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                json={
+                    "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
+                    "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            logger.warning("[LLM] gemini returned HTTP %s", resp.status_code)
+        return None
+
+    @classmethod
+    async def _call_ollama(
+        cls, model: str, system_prompt: str, prompt: str, temperature: float
+    ) -> Optional[str]:
+        base = getattr(settings, "OLLAMA_BASE_URL", None)
+        if not base:
+            return None
+        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{base.rstrip('/')}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": f"{system_prompt}\n\n{prompt}",
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": temperature},
+                },
+            )
+            if resp.status_code == 200:
+                return resp.json().get("response")
+        return None
+
+    # ------------------------------------------------------------------ #
+    # Orchestration
+    # ------------------------------------------------------------------ #
+    @classmethod
+    async def query_llm_with_provenance(
+        cls,
+        prompt: str,
+        system_prompt: str = TRIAGE_SYSTEM_PROMPT,
+        temperature: float = 0.2,
+    ) -> Optional[tuple]:
+        """
+        Try each configured provider in order. Returns ``(raw_text, "provider:model")``
+        on the first success, or ``None`` when nothing is configured / every call fails.
+        """
+        for provider, model in cls.resolve_chain():
+            try:
+                if provider in ("openai", "groq"):
+                    text = await cls._call_openai_compatible(provider, model, system_prompt, prompt, temperature)
+                elif provider == "gemini":
+                    text = await cls._call_gemini(model, system_prompt, prompt, temperature)
+                elif provider == "ollama":
+                    text = await cls._call_ollama(model, system_prompt, prompt, temperature)
+                else:
+                    text = None
+                if text:
+                    return text, f"{provider}:{model}"
+            except Exception as exc:  # never let a provider failure escape — degrade to AST
+                logger.warning("[LLM] %s invocation failed: %s", provider, exc)
+        return None
 
     @classmethod
     async def query_llm(
@@ -118,74 +312,9 @@ class LLMTriageEngine:
         system_prompt: str = TRIAGE_SYSTEM_PROMPT,
         temperature: float = 0.2,
     ) -> Optional[str]:
-        """
-        Executes an LLM completion using configured provider (OpenAI, Gemini, Anthropic, or Ollama).
-        Returns raw response text or None if no API keys are configured.
-        """
-        # 1. OpenAI / Compatible Endpoint
-        openai_key = getattr(settings, "OPENAI_API_KEY", None)
-        if openai_key:
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        "https://api.openai.com/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
-                        json={
-                            "model": "gpt-4o-mini",
-                            "messages": [
-                                {"role": "system", "content": system_prompt},
-                                {"role": "user", "content": prompt},
-                            ],
-                            "temperature": temperature,
-                            "response_format": {"type": "json_object"},
-                        },
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        return data["choices"][0]["message"]["content"]
-            except Exception as exc:
-                logger.warning(f"[LLM] OpenAI invocation failed: {exc}")
-
-        # 2. Google Gemini API Endpoint
-        gemini_key = getattr(settings, "GEMINI_API_KEY", None)
-        if gemini_key:
-            try:
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    resp = await client.post(
-                        url,
-                        headers={"Content-Type": "application/json"},
-                        json={
-                            "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
-                            "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
-                        },
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        return data["candidates"][0]["content"]["parts"][0]["text"]
-            except Exception as exc:
-                logger.warning(f"[LLM] Gemini invocation failed: {exc}")
-
-        # 3. Local Ollama Fallback (if running locally at http://localhost:11434)
-        ollama_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                resp = await client.post(
-                    f"{ollama_url}/api/generate",
-                    json={
-                        "model": "llama3.2",
-                        "prompt": f"{system_prompt}\n\n{prompt}",
-                        "stream": False,
-                        "format": "json",
-                    },
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return data.get("response")
-        except Exception:
-            pass  # Ollama not running locally
-
-        return None
+        """Backwards-compatible text-only wrapper around :meth:`query_llm_with_provenance`."""
+        result = await cls.query_llm_with_provenance(prompt, system_prompt, temperature)
+        return result[0] if result else None
 
     @classmethod
     async def synthesize_semantic_root_cause(
@@ -199,7 +328,10 @@ class LLMTriageEngine:
         tech_stack: List[str],
         localized_files: List[Dict[str, Any]],
     ) -> Optional[Dict[str, Any]]:
-        """Invokes LLM with ROOT_CAUSE_PROMPT_TEMPLATE."""
+        """
+        Invoke the LLM with ROOT_CAUSE_PROMPT_TEMPLATE and return the parsed result
+        stamped with the ``_provider`` that produced it, or ``None`` to keep AST-only.
+        """
         prompt = ROOT_CAUSE_PROMPT_TEMPLATE.format(
             repo_owner=repo_owner,
             repo_name=repo_name,
@@ -210,13 +342,15 @@ class LLMTriageEngine:
             body=(body or "")[:2000],
             localized_files_json=json.dumps(localized_files, indent=2),
         )
-        raw_json = await cls.query_llm(prompt)
-        if raw_json:
-            try:
-                return json.loads(raw_json)
-            except Exception:
-                pass
-        return None
+        result = await cls.query_llm_with_provenance(prompt)
+        if not result:
+            return None
+        raw_json, provider_label = result
+        parsed = cls._coerce_json(raw_json)
+        if parsed is None:
+            return None
+        parsed["_provider"] = provider_label
+        return parsed
 
     @classmethod
     async def synthesize_code_patch(
@@ -237,13 +371,13 @@ class LLMTriageEngine:
             title=title,
             body=(body or "")[:2000],
         )
-        raw_json = await cls.query_llm(prompt)
-        if raw_json:
-            try:
-                return json.loads(raw_json)
-            except Exception:
-                pass
-        return None
+        result = await cls.query_llm_with_provenance(prompt)
+        if not result:
+            return None
+        parsed = cls._coerce_json(result[0])
+        if parsed is not None:
+            parsed["_provider"] = result[1]
+        return parsed
 
     @classmethod
     async def synthesize_reproduction_script(
@@ -264,10 +398,10 @@ class LLMTriageEngine:
             title=title,
             body=(body or "")[:2000],
         )
-        raw_json = await cls.query_llm(prompt)
-        if raw_json:
-            try:
-                return json.loads(raw_json)
-            except Exception:
-                pass
-        return None
+        result = await cls.query_llm_with_provenance(prompt)
+        if not result:
+            return None
+        parsed = cls._coerce_json(result[0])
+        if parsed is not None:
+            parsed["_provider"] = result[1]
+        return parsed
