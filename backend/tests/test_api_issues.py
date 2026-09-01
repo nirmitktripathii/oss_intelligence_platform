@@ -165,3 +165,42 @@ async def test_get_single_issue_not_found(client: httpx.AsyncClient, seed_sample
     assert response.status_code == 404
     data = response.json()
     assert "not found" in data["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_sort_issues_by_ai_confidence(client: httpx.AsyncClient, seed_sample_issues, db_session):
+    """Sort by highest real AI triage confidence; issues without a computed score sort last."""
+    from datetime import datetime, timezone
+    from app.models.triage import TriageReport
+
+    def _report(issue_id: str, conf: float) -> TriageReport:
+        return TriageReport(
+            issue_id=issue_id,
+            summary="s",
+            root_cause_analysis="rc",
+            localized_files=[],
+            reproduction_code="c",
+            reproduction_lang="python",
+            reproduction_instructions="i",
+            fix_plan_steps=[],
+            triage_confidence=conf,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    # Give two issues real confidence; the others have none (fastapi has a seeded report
+    # with NULL confidence, kubernetes has no report at all) and must sort last.
+    db_session.add(_report("pola-rs/polars#3003", 0.91))
+    db_session.add(_report("langchain-ai/langchain#2002", 0.62))
+    await db_session.commit()
+
+    response = await client.get("/api/v1/issues?sort_by=confidence_desc&page_size=100")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 4  # left-join must not multiply rows
+    ids = [i["id"] for i in data["items"]]
+
+    assert ids[0] == "pola-rs/polars#3003"
+    assert ids.index("pola-rs/polars#3003") < ids.index("langchain-ai/langchain#2002")
+    assert ids.index("langchain-ai/langchain#2002") < ids.index("kubernetes/kubernetes#4004")
+    assert ids.index("langchain-ai/langchain#2002") < ids.index("fastapi/fastapi#1001")
