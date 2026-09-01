@@ -54,6 +54,7 @@ const SORT_TO_BACKEND: Record<string, string> = {
   roi_desc: 'hourly_roi',
   bounty_desc: 'bounty_desc',
   time_asc: 'time_asc',
+  confidence_desc: 'confidence_desc',
 };
 
 /** timeToSolve bucket -> estimated-effort window (hours) on Issue.estimated_hours. */

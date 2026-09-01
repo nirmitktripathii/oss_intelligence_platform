@@ -7,6 +7,7 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.issue import Issue
+from app.models.triage import TriageReport
 from app.schemas.issue import (
     IssueDifficulty,
     IssueDomain,
@@ -29,7 +30,7 @@ async def list_issues(
     search: Optional[str] = Query(None, description="Keyword search in title, body, and repository name"),
     sort_by: Optional[str] = Query(
         "newest",
-        description="Sort by: newest, oldest, hourly_roi, bounty_desc, time_asc, comments",
+        description="Sort by: newest, oldest, hourly_roi, bounty_desc, time_asc, comments, confidence_desc",
     ),
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
@@ -84,6 +85,14 @@ async def list_issues(
         query = query.order_by(Issue.estimated_hours.asc(), desc(Issue.github_created_at))
     elif sort_by == "comments":
         query = query.order_by(desc(Issue.comments_count))
+    elif sort_by == "confidence_desc":
+        # Highest AI triage confidence first. Left-join the (unique, one-per-issue) triage
+        # report; issues without one — or with no computed confidence yet — sort last.
+        # coalesce(-1) keeps this portable across SQLite/Postgres (no reliance on NULLS LAST).
+        query = query.outerjoin(TriageReport, TriageReport.issue_id == Issue.id).order_by(
+            desc(func.coalesce(TriageReport.triage_confidence, -1.0)),
+            desc(Issue.github_created_at),
+        )
     else:  # "newest" default
         query = query.order_by(desc(Issue.github_created_at))
 
