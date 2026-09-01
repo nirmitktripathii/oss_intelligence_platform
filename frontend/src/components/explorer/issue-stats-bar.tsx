@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useBounties } from '@/hooks/use-bounties';
-import { Coins, Flame, CheckCircle2, Cpu } from 'lucide-react';
+import { Coins, Flame, Target, Cpu } from 'lucide-react';
 
 interface IssueStatsBarProps {
   totalIssuesCount?: number;
@@ -58,18 +58,18 @@ export function IssueStatsBar({ totalIssuesCount = 54 }: IssueStatsBarProps) {
         </div>
       </div>
 
-      {/* Stat 4: AI Triaged Coverage */}
+      {/* Stat 4: Active Funded Bounties */}
       <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/70 p-3 flex items-center justify-between">
         <div className="space-y-0.5">
           <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
-            AST Triage Coverage
+            Active Bounties
           </span>
           <span className="text-lg font-extrabold text-purple-400">
-            100% Verified
+            {stats.activeBountiesCount.toLocaleString()}
           </span>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-400">
-          <CheckCircle2 className="h-4 w-4" />
+          <Target className="h-4 w-4" />
         </div>
       </div>
     </div>

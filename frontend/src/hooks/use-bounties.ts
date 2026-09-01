@@ -11,11 +11,12 @@ export interface BountyStats {
 }
 
 export function useBounties() {
+  // Seed with zeros, never fabricated figures — real telemetry replaces these on load.
   const [stats, setStats] = useState<BountyStats>({
-    totalBountyPoolUsd: 14500,
-    activeBountiesCount: 38,
-    avgHourlyRoi: 142.5,
-    highestBountyUsd: 1250,
+    totalBountyPoolUsd: 0,
+    activeBountiesCount: 0,
+    avgHourlyRoi: 0,
+    highestBountyUsd: 0,
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -26,24 +27,33 @@ export function useBounties() {
         const res = await apiClient.getBounties();
         if (mounted && res) {
           const items = res.items || [];
-          const totalPool = res.total_payout_pool_usd || items.reduce((sum: number, b: any) => sum + (b.bounty_amount_usd || 0), 0);
-          const activeCount = res.active_bounties_count || items.length;
-          const avgRoi = items.length > 0
-            ? items.reduce((sum: number, b: any) => sum + (b.hourly_roi_usd || 0), 0) / items.length
-            : 140;
-          const highest = items.length > 0
-            ? Math.max(...items.map((b: any) => b.bounty_amount_usd || 0))
-            : 600;
+          // Live backend returns total_bounty_usd / total / average_hourly_roi with
+          // per-item `hourly_roi`; the offline fallback shape uses
+          // total_payout_pool_usd / active_bounties_count. Accept either, then fall
+          // back to computing from items so both modes render real numbers.
+          const totalPool =
+            res.total_bounty_usd ??
+            res.total_payout_pool_usd ??
+            items.reduce((sum: number, b: any) => sum + (b.bounty_amount_usd || 0), 0);
+          const activeCount = res.total ?? res.active_bounties_count ?? items.length;
+          const avgRoi =
+            res.average_hourly_roi ??
+            (items.length > 0
+              ? items.reduce((sum: number, b: any) => sum + (b.hourly_roi ?? b.hourly_roi_usd ?? 0), 0) /
+                items.length
+              : 0);
+          const highest =
+            items.length > 0 ? Math.max(...items.map((b: any) => b.bounty_amount_usd || 0)) : 0;
 
           setStats({
-            totalBountyPoolUsd: totalPool || 14500,
-            activeBountiesCount: activeCount || 38,
-            avgHourlyRoi: Math.round(avgRoi) || 142,
-            highestBountyUsd: highest || 1250,
+            totalBountyPoolUsd: totalPool || 0,
+            activeBountiesCount: activeCount || 0,
+            avgHourlyRoi: Math.round(avgRoi) || 0,
+            highestBountyUsd: highest || 0,
           });
         }
       } catch {
-        // use default realistic fallback stats
+        // Leave zeros rather than inventing bounty telemetry the backend didn't return.
       } finally {
         if (mounted) setIsLoading(false);
       }
