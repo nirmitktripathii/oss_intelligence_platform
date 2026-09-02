@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Terminal, Bell, Zap, Command, Github, Network } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { SkinSwitcher } from '@/components/theme/skin-switcher';
 import { NotificationModal } from '@/components/modals/notification-modal';
 import { PricingModal } from '@/components/modals/pricing-modal';
 import { CommandMenu } from '@/components/layout/command-menu';
@@ -41,12 +42,12 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
           {/* Logo & Status Badge */}
           <div className="flex items-center gap-4">
             <Link href="/" className="flex items-center gap-2 group">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 group-hover:border-emerald-400 group-hover:bg-emerald-500/20 transition-all shadow-[0_0_10px_rgba(16,185,129,0.15)]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 border border-primary/30 text-primary group-hover:border-primary group-hover:bg-primary/20 transition-all shadow-[0_0_10px_hsl(var(--primary)/0.15)]">
                 <Terminal className="h-4 w-4" />
               </div>
               <div className="flex flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-bold tracking-tight text-foreground group-hover:text-emerald-400 transition-colors">
+                  <span className="text-sm font-bold tracking-tight text-foreground group-hover:text-primary transition-colors">
                     {SITE_CONFIG.name}
                   </span>
                   <span className="text-[10px] text-muted-foreground hidden sm:inline">TERMINAL</span>
@@ -58,21 +59,21 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
             <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-border text-[11px] text-muted-foreground">
               <div className="flex items-center gap-1.5 bg-muted/60 px-2 py-0.5 rounded border border-border/80">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                 </span>
                 <span className="text-foreground font-medium">LIVE</span>
               </div>
               <span className="text-muted-foreground">
                 Pool:{' '}
-                <span className="text-amber-400 font-semibold">
+                <span className="text-bounty-gold font-semibold">
                   ${stats.totalBountyPoolUsd.toLocaleString()}
                 </span>
               </span>
               <span className="text-border">•</span>
               <span className="text-muted-foreground">
                 Active:{' '}
-                <span className="text-emerald-400 font-semibold">{stats.activeBountiesCount}</span>
+                <span className="text-primary font-semibold">{stats.activeBountiesCount}</span>
               </span>
             </div>
           </div>
@@ -84,7 +85,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
                 variant={pathname === '/' ? 'secondary' : 'ghost'}
                 size="sm"
                 className={`text-xs gap-1.5 ${
-                  pathname === '/' ? 'text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30' : 'text-muted-foreground'
+                  pathname === '/' ? 'text-primary font-bold bg-primary/10 border border-primary/30' : 'text-muted-foreground'
                 }`}
               >
                 <Terminal className="h-3.5 w-3.5" />
@@ -96,7 +97,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
                 variant={pathname === '/graph' ? 'secondary' : 'ghost'}
                 size="sm"
                 className={`text-xs gap-1.5 ${
-                  pathname === '/graph' ? 'text-purple-400 font-bold bg-purple-500/10 border border-purple-500/30' : 'text-muted-foreground'
+                  pathname === '/graph' ? 'text-accent font-bold bg-accent/10 border border-accent/30' : 'text-muted-foreground'
                 }`}
               >
                 <Network className="h-3.5 w-3.5" />
@@ -108,7 +109,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
                 variant={pathname === '/pricing' ? 'secondary' : 'ghost'}
                 size="sm"
                 className={`text-xs gap-1.5 ${
-                  pathname === '/pricing' ? 'text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30' : 'text-muted-foreground'
+                  pathname === '/pricing' ? 'text-bounty-gold font-bold bg-bounty-gold/10 border border-bounty-gold/30' : 'text-muted-foreground'
                 }`}
               >
                 <Zap className="h-3.5 w-3.5" />
@@ -150,7 +151,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
               variant="outline"
               size="icon"
               onClick={() => setIsNotificationOpen(true)}
-              className="h-8 w-8 border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 text-zinc-400 hover:text-white"
+              className="h-8 w-8 border-border bg-card/60 hover:border-border text-muted-foreground hover:text-foreground"
               title="Configure Multi-Channel Alerts"
             >
               <Bell className="h-3.5 w-3.5" />
@@ -168,7 +169,8 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
               <span className="hidden sm:inline">Pro Terminal</span>
             </Button>
 
-            {/* Theme Toggle */}
+            {/* Terminal skin + light/dark toggle */}
+            <SkinSwitcher />
             <ThemeToggle />
 
             {/* GitHub Repo link */}
@@ -181,7 +183,7 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-zinc-400 hover:text-zinc-100"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
                 title="GitHub Repository"
               >
                 <Github className="h-4 w-4" />

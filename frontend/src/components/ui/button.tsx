@@ -13,19 +13,19 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const Comp = asChild ? Slot : 'button';
 
     const baseStyles =
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-mono font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 disabled:pointer-events-none disabled:opacity-50 select-none';
+      'inline-flex items-center justify-center whitespace-nowrap rounded-md text-xs font-mono font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 select-none';
 
     const variants: Record<string, string> = {
       default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
-      primary: 'bg-emerald-600 text-white shadow-sm hover:bg-emerald-500 active:scale-[0.98]',
+      primary: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-[0.98]',
       terminal:
-        'bg-zinc-900 text-emerald-400 border border-emerald-500/30 hover:border-emerald-400 hover:bg-emerald-950/30 active:scale-[0.98] shadow-[0_0_10px_rgba(16,185,129,0.1)]',
+        'bg-card text-primary border border-primary/30 hover:border-primary hover:bg-primary/10 active:scale-[0.98] shadow-[0_0_10px_hsl(var(--primary)/0.1)]',
       outline:
-        'border border-zinc-700/80 bg-transparent text-zinc-300 hover:bg-zinc-800/80 hover:text-white dark:border-zinc-800 dark:hover:bg-zinc-800',
-      secondary: 'bg-zinc-800 text-zinc-200 shadow-sm hover:bg-zinc-700',
-      ghost: 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200',
-      destructive: 'bg-rose-600 text-white shadow-sm hover:bg-rose-500',
-      glow: 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white shadow-[0_0_20px_rgba(16,185,129,0.35)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] hover:brightness-110 active:scale-[0.98]',
+        'border border-border/80 bg-transparent text-foreground hover:bg-secondary/80 hover:text-foreground dark:border-border dark:hover:bg-secondary',
+      secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-muted',
+      ghost: 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground',
+      destructive: 'bg-destructive text-white shadow-sm hover:bg-destructive/90',
+      glow: 'bg-gradient-to-r from-primary to-accent text-primary-foreground shadow-[0_0_20px_hsl(var(--primary)/0.35)] hover:shadow-[0_0_25px_hsl(var(--primary)/0.5)] hover:brightness-110 active:scale-[0.98]',
     };
 
     const sizes: Record<string, string> = {

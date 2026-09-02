@@ -256,7 +256,7 @@ export function GraphCanvas({
   return (
     <div
       ref={containerRef}
-      className={`relative flex h-full w-full overflow-hidden bg-zinc-950 font-mono text-zinc-100 select-none ${className || ''}`}
+      className={`relative flex h-full w-full overflow-hidden bg-background font-mono text-foreground select-none ${className || ''}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
@@ -267,18 +267,18 @@ export function GraphCanvas({
         {/* Left Side: Search & Filters */}
         <div className="flex items-center gap-3 pointer-events-auto">
           <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="text"
               placeholder="Search AST symbols, files, classes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-9 w-72 pl-9 text-xs sm:text-sm bg-zinc-900/90 border-zinc-700 focus:border-emerald-500 rounded-xl shadow-xl backdrop-blur-md text-zinc-100 placeholder:text-zinc-500"
+              className="h-9 w-72 pl-9 text-xs sm:text-sm bg-card/90 border-border focus:border-primary rounded-xl shadow-xl backdrop-blur-md text-foreground placeholder:text-muted-foreground"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-xs text-zinc-400 hover:text-white"
+                className="absolute right-3 top-2.5 text-xs text-muted-foreground hover:text-foreground"
               >
                 ✕
               </button>
@@ -286,11 +286,11 @@ export function GraphCanvas({
           </div>
 
           {/* Layout Mode Switcher */}
-          <div className="hidden sm:flex items-center rounded-xl border border-zinc-800 bg-zinc-900/90 p-1 shadow-xl backdrop-blur-md text-xs">
+          <div className="hidden sm:flex items-center rounded-xl border border-border bg-card/90 p-1 shadow-xl backdrop-blur-md text-xs">
             <button
               onClick={() => setLayoutMode('organic')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                layoutMode === 'organic' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+                layoutMode === 'organic' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Organic Force Clusters"
             >
@@ -300,7 +300,7 @@ export function GraphCanvas({
             <button
               onClick={() => setLayoutMode('concentric')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                layoutMode === 'concentric' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+                layoutMode === 'concentric' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Concentric Subsystem Rings"
             >
@@ -310,7 +310,7 @@ export function GraphCanvas({
             <button
               onClick={() => setLayoutMode('layered')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                layoutMode === 'layered' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+                layoutMode === 'layered' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Architectural Layer Hierarchy"
             >
@@ -320,7 +320,7 @@ export function GraphCanvas({
             <button
               onClick={() => setLayoutMode('grid')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                layoutMode === 'grid' ? 'bg-emerald-600 text-white shadow-md' : 'text-zinc-400 hover:text-white'
+                layoutMode === 'grid' ? 'bg-primary text-primary-foreground shadow-md' : 'text-muted-foreground hover:text-foreground'
               }`}
               title="Community Matrix Grid"
             >
@@ -332,25 +332,25 @@ export function GraphCanvas({
 
         {/* Right Side: Quick Stats Telemetry Badge */}
         <div className="flex items-center gap-2 pointer-events-auto">
-          <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900/90 px-3.5 py-1.5 text-xs sm:text-sm shadow-xl backdrop-blur-md">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
-            <span className="text-zinc-400">Showing:</span>
-            <span className="font-extrabold text-emerald-400">{filteredNodes.length} / {data.nodes.length} Nodes</span>
-            <span className="text-zinc-600">•</span>
-            <span className="font-extrabold text-cyan-400">{visibleEdges.length} Edges</span>
-            <span className="text-zinc-600 hidden md:inline">•</span>
-            <span className="font-extrabold text-amber-400 hidden md:inline">{data.godNodes.length} Hubs</span>
+          <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card/90 px-3.5 py-1.5 text-xs sm:text-sm shadow-xl backdrop-blur-md">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
+            <span className="text-muted-foreground">Showing:</span>
+            <span className="font-extrabold text-primary">{filteredNodes.length} / {data.nodes.length} Nodes</span>
+            <span className="text-muted-foreground">•</span>
+            <span className="font-extrabold text-accent">{visibleEdges.length} Edges</span>
+            <span className="text-muted-foreground hidden md:inline">•</span>
+            <span className="font-extrabold text-bounty-gold hidden md:inline">{data.godNodes.length} Hubs</span>
           </div>
 
           {/* Zoom Controls */}
-          <div className="flex items-center rounded-xl border border-zinc-800 bg-zinc-900/90 p-1 shadow-xl backdrop-blur-md">
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={handleZoomIn} title="Zoom In">
+          <div className="flex items-center rounded-xl border border-border bg-card/90 p-1 shadow-xl backdrop-blur-md">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleZoomIn} title="Zoom In">
               <ZoomIn className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={handleZoomOut} title="Zoom Out">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleZoomOut} title="Zoom Out">
               <ZoomOut className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-white" onClick={handleResetView} title="Reset View">
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleResetView} title="Reset View">
               <Maximize2 className="h-4 w-4" />
             </Button>
           </div>
@@ -358,15 +358,15 @@ export function GraphCanvas({
       </div>
 
       {/* 2. LEFT FLOATING CONTROL DECK: Community Filter & Node Filters (Enlarged & Easy to Read) */}
-      <div className="absolute left-3 top-16 z-20 w-76 sm:w-80 rounded-2xl border border-zinc-800 bg-zinc-950/90 p-4 font-mono shadow-2xl backdrop-blur-2xl space-y-3.5 pointer-events-auto">
-        <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-          <span className="font-extrabold text-zinc-100 flex items-center gap-2 text-sm">
-            <Layers className="h-4 w-4 text-purple-400" />
+      <div className="absolute left-3 top-16 z-20 w-76 sm:w-80 rounded-2xl border border-border bg-background/90 p-4 font-mono shadow-2xl backdrop-blur-2xl space-y-3.5 pointer-events-auto">
+        <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+          <span className="font-extrabold text-foreground flex items-center gap-2 text-sm">
+            <Layers className="h-4 w-4 text-accent" />
             <span>Architectural Clusters</span>
           </span>
           <button
             onClick={() => { setSelectedCommunity('all'); setSelectedType('all'); setShowGodNodesOnly(false); }}
-            className="text-xs text-emerald-400 hover:underline font-semibold"
+            className="text-xs text-primary hover:underline font-semibold"
           >
             Reset
           </button>
@@ -378,12 +378,12 @@ export function GraphCanvas({
             onClick={() => setSelectedCommunity('all')}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-all ${
               selectedCommunity === 'all'
-                ? 'bg-zinc-800 text-white font-extrabold border border-zinc-700 shadow-sm'
-                : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                ? 'bg-secondary text-foreground font-extrabold border border-border shadow-sm'
+                : 'text-muted-foreground hover:bg-card hover:text-foreground'
             }`}
           >
             <span>All Architectural Layers</span>
-            <span className="text-xs bg-zinc-900 font-bold px-2 py-0.5 rounded-md text-emerald-400 border border-zinc-800">
+            <span className="text-xs bg-card font-bold px-2 py-0.5 rounded-md text-primary border border-border">
               {data.nodes.length}
             </span>
           </button>
@@ -394,8 +394,8 @@ export function GraphCanvas({
               onClick={() => setSelectedCommunity(comm.id)}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs sm:text-sm transition-all ${
                 selectedCommunity === comm.id
-                  ? 'bg-zinc-800 text-white font-extrabold border shadow-sm'
-                  : 'text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200'
+                  ? 'bg-secondary text-foreground font-extrabold border shadow-sm'
+                  : 'text-muted-foreground hover:bg-card hover:text-foreground'
               }`}
               style={{
                 borderColor: selectedCommunity === comm.id ? comm.color : 'transparent',
@@ -405,7 +405,7 @@ export function GraphCanvas({
                 <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: comm.color }} />
                 <span className="truncate">{comm.name}</span>
               </div>
-              <span className="text-xs bg-zinc-900 font-bold px-2 py-0.5 rounded-md text-zinc-300 shrink-0 border border-zinc-800">
+              <span className="text-xs bg-card font-bold px-2 py-0.5 rounded-md text-foreground shrink-0 border border-border">
                 {data.nodes.filter((n) => n.communityId === comm.id).length}
               </span>
             </button>
@@ -413,17 +413,17 @@ export function GraphCanvas({
         </div>
 
         {/* Toggles: Hubs Only */}
-        <div className="pt-2.5 border-t border-zinc-800/80 space-y-2.5">
-          <div className="flex items-center justify-between bg-zinc-900/60 p-2 rounded-xl border border-zinc-800">
-            <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
+        <div className="pt-2.5 border-t border-border/80 space-y-2.5">
+          <div className="flex items-center justify-between bg-card/60 p-2 rounded-xl border border-border">
+            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Flame className="h-3.5 w-3.5 text-bounty-gold" />
               <span>Hubs & God Nodes Only</span>
             </span>
             <input
               type="checkbox"
               checked={showGodNodesOnly}
               onChange={(e) => setShowGodNodesOnly(e.target.checked)}
-              className="accent-amber-500 cursor-pointer h-4 w-4 rounded"
+              className="accent-bounty-gold cursor-pointer h-4 w-4 rounded"
             />
           </div>
 
@@ -435,8 +435,8 @@ export function GraphCanvas({
                 onClick={() => setSelectedType(type)}
                 className={`px-2.5 py-1 rounded-lg text-xs uppercase font-mono transition-all ${
                   selectedType === type
-                    ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
-                    : 'bg-zinc-900 text-zinc-400 border border-zinc-800 hover:text-white hover:bg-zinc-800'
+                    ? 'bg-primary text-primary-foreground font-extrabold shadow-sm'
+                    : 'bg-card text-muted-foreground border border-border hover:text-foreground hover:bg-secondary'
                 }`}
               >
                 {type}
@@ -608,15 +608,15 @@ export function GraphCanvas({
 
       {/* 4. RIGHT SLIDE-OUT AST NODE INSPECTOR & CODE SANDBOX (Larger Fonts & Clear Details) */}
       {selectedNode && (
-        <div className="absolute top-16 right-3 z-20 w-96 sm:w-[420px] rounded-2xl border border-zinc-800 bg-zinc-950/95 p-6 font-mono text-xs sm:text-sm text-zinc-300 shadow-2xl backdrop-blur-2xl space-y-4 pointer-events-auto max-h-[82vh] overflow-y-auto">
+        <div className="absolute top-16 right-3 z-20 w-96 sm:w-[420px] rounded-2xl border border-border bg-background/95 p-6 font-mono text-xs sm:text-sm text-foreground shadow-2xl backdrop-blur-2xl space-y-4 pointer-events-auto max-h-[82vh] overflow-y-auto">
           {/* Header */}
-          <div className="flex items-start justify-between border-b border-zinc-800/80 pb-3.5 gap-2">
+          <div className="flex items-start justify-between border-b border-border/80 pb-3.5 gap-2">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <FileCode className="h-5 w-5 text-emerald-400 shrink-0" />
-                <h3 className="font-extrabold text-base sm:text-lg text-zinc-100 truncate">{selectedNode.label}</h3>
+                <FileCode className="h-5 w-5 text-primary shrink-0" />
+                <h3 className="font-extrabold text-base sm:text-lg text-foreground truncate">{selectedNode.label}</h3>
               </div>
-              <p className="text-xs sm:text-sm text-purple-300 font-semibold">{selectedNode.communityName}</p>
+              <p className="text-xs sm:text-sm text-accent font-semibold">{selectedNode.communityName}</p>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -628,7 +628,7 @@ export function GraphCanvas({
               </Badge>
               <button
                 onClick={() => setSelectedNode(null)}
-                className="text-zinc-400 hover:text-white px-2 py-1 rounded text-sm font-bold"
+                className="text-muted-foreground hover:text-foreground px-2 py-1 rounded text-sm font-bold"
               >
                 ✕
               </button>
@@ -638,15 +638,15 @@ export function GraphCanvas({
           {/* File Path + Copy */}
           {selectedNode.file && (
             <div className="space-y-1.5">
-              <span className="text-xs text-zinc-400 uppercase font-bold tracking-wider">Source File Location:</span>
-              <div className="flex items-center justify-between bg-zinc-900/90 border border-zinc-800 p-2.5 rounded-xl text-xs sm:text-sm">
-                <code className="text-cyan-300 truncate mr-2 font-mono">{selectedNode.file}{selectedNode.line ? `:${selectedNode.line}` : ''}</code>
+              <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Source File Location:</span>
+              <div className="flex items-center justify-between bg-card/90 border border-border p-2.5 rounded-xl text-xs sm:text-sm">
+                <code className="text-accent truncate mr-2 font-mono">{selectedNode.file}{selectedNode.line ? `:${selectedNode.line}` : ''}</code>
                 <button
                   onClick={() => handleCopyPath(selectedNode.file || '')}
-                  className="text-zinc-400 hover:text-white shrink-0 p-1 hover:bg-zinc-800 rounded"
+                  className="text-muted-foreground hover:text-foreground shrink-0 p-1 hover:bg-secondary rounded"
                   title="Copy File Path"
                 >
-                  {copiedPath ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  {copiedPath ? <Check className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -654,40 +654,40 @@ export function GraphCanvas({
 
           {/* Centrality & Impact Metrics */}
           <div className="grid grid-cols-2 gap-3 pt-1">
-            <div className="rounded-xl bg-zinc-900/70 border border-zinc-800 p-3">
-              <span className="text-xs text-zinc-400 block font-semibold">AST Centrality</span>
-              <span className="text-base sm:text-lg font-extrabold text-zinc-100">{selectedNode.degree} Edges</span>
+            <div className="rounded-xl bg-card/70 border border-border p-3">
+              <span className="text-xs text-muted-foreground block font-semibold">AST Centrality</span>
+              <span className="text-base sm:text-lg font-extrabold text-foreground">{selectedNode.degree} Edges</span>
             </div>
-            <div className="rounded-xl bg-zinc-900/70 border border-zinc-800 p-3">
-              <span className="text-xs text-zinc-400 block font-semibold">Blast Radius Impact</span>
-              <span className="text-base sm:text-lg font-extrabold text-emerald-400">
+            <div className="rounded-xl bg-card/70 border border-border p-3">
+              <span className="text-xs text-muted-foreground block font-semibold">Blast Radius Impact</span>
+              <span className="text-base sm:text-lg font-extrabold text-primary">
                 {selectedNode.blastRadiusConfidence ? `${Math.round(selectedNode.blastRadiusConfidence * 100)}% Match` : 'Localized Hub'}
               </span>
             </div>
           </div>
 
           {/* Callers & Callees Dependency Graph Navigation */}
-          <div className="space-y-2.5 pt-2 border-t border-zinc-800/80">
-            <span className="text-xs sm:text-sm font-bold text-zinc-100 flex items-center gap-2">
-              <GitFork className="h-4 w-4 text-cyan-400" />
+          <div className="space-y-2.5 pt-2 border-t border-border/80">
+            <span className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+              <GitFork className="h-4 w-4 text-accent" />
               <span>Dependency Traces (Click to Jump)</span>
             </span>
 
             {/* Inbound Callers */}
             <div className="space-y-1.5">
-              <span className="text-xs text-zinc-400 font-semibold">Upstream Callers ({nodeConnections.callers.length}):</span>
+              <span className="text-xs text-muted-foreground font-semibold">Upstream Callers ({nodeConnections.callers.length}):</span>
               <div className="flex flex-wrap gap-1.5">
                 {nodeConnections.callers.length === 0 ? (
-                  <span className="text-xs text-zinc-500">No incoming caller edges</span>
+                  <span className="text-xs text-muted-foreground">No incoming caller edges</span>
                 ) : (
                   nodeConnections.callers.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => handleFocusNode(c)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-emerald-950 border border-zinc-800 hover:border-emerald-500 text-xs text-zinc-200 transition-colors flex items-center gap-1.5 font-medium"
+                      className="px-2.5 py-1 rounded-lg bg-card hover:bg-primary border border-border hover:border-primary text-xs text-foreground transition-colors flex items-center gap-1.5 font-medium"
                     >
                       <span>{c.label}</span>
-                      <ArrowRight className="h-3 w-3 text-emerald-400" />
+                      <ArrowRight className="h-3 w-3 text-primary" />
                     </button>
                   ))
                 )}
@@ -696,18 +696,18 @@ export function GraphCanvas({
 
             {/* Outbound Callees */}
             <div className="space-y-1.5 pt-1.5">
-              <span className="text-xs text-zinc-400 font-semibold">Downstream Callees ({nodeConnections.callees.length}):</span>
+              <span className="text-xs text-muted-foreground font-semibold">Downstream Callees ({nodeConnections.callees.length}):</span>
               <div className="flex flex-wrap gap-1.5">
                 {nodeConnections.callees.length === 0 ? (
-                  <span className="text-xs text-zinc-500">No outgoing dependency edges</span>
+                  <span className="text-xs text-muted-foreground">No outgoing dependency edges</span>
                 ) : (
                   nodeConnections.callees.map((c) => (
                     <button
                       key={c.id}
                       onClick={() => handleFocusNode(c)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-purple-950 border border-zinc-800 hover:border-purple-500 text-xs text-zinc-200 transition-colors flex items-center gap-1.5 font-medium"
+                      className="px-2.5 py-1 rounded-lg bg-card hover:bg-accent border border-border hover:border-accent text-xs text-foreground transition-colors flex items-center gap-1.5 font-medium"
                     >
-                      <ArrowLeft className="h-3 w-3 text-purple-400" />
+                      <ArrowLeft className="h-3 w-3 text-accent" />
                       <span>{c.label}</span>
                     </button>
                   ))
@@ -717,7 +717,7 @@ export function GraphCanvas({
           </div>
 
           {/* Action Bar */}
-          <div className="pt-2.5 border-t border-zinc-800/80 flex items-center gap-2">
+          <div className="pt-2.5 border-t border-border/80 flex items-center gap-2">
             <Button
               variant="glow"
               size="default"

@@ -66,13 +66,13 @@ export default function PricingPage() {
     <div className="container py-12 max-w-6xl space-y-16 font-mono text-foreground mx-auto">
       {/* Header */}
       <div className="text-center space-y-4 max-w-2xl mx-auto">
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400 font-bold shadow-sm">
+        <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs text-primary font-bold shadow-sm">
           <Zap className="h-3.5 w-3.5" />
           <span>PRO & TEAM PLANS</span>
         </div>
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground">
           Turn open-source bugs into{' '}
-          <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-primary via-primary to-accent bg-clip-text text-transparent">
             recurring bounty income
           </span>
         </h1>
@@ -99,12 +99,12 @@ export default function PricingPage() {
               onClick={() => setBillingCycle('annual')}
               className={`px-4 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
                 billingCycle === 'annual'
-                  ? 'bg-emerald-600 text-white font-semibold shadow-sm'
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <span>Annual Billing</span>
-              <span className="rounded bg-emerald-400/20 px-2 py-0.5 text-[10px] text-emerald-200 font-bold uppercase">
+              <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] text-primary font-bold uppercase">
                 Save 20%
               </span>
             </button>
@@ -123,12 +123,12 @@ export default function PricingPage() {
               key={plan.id}
               className={`relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200 ${
                 isPopular
-                  ? 'border-emerald-500 bg-gradient-to-b from-emerald-950/20 via-card to-card shadow-[0_0_35px_rgba(16,185,129,0.15)] ring-2 ring-emerald-500/50'
+                  ? 'border-primary bg-gradient-to-b from-primary/20 via-card to-card shadow-[0_0_35px_hsl(var(--primary)/0.15)] ring-2 ring-primary/50'
                   : 'border-border bg-card/60 hover:border-border/80'
               }`}
             >
               {isPopular && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-4 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-black shadow-md">
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-primary-foreground shadow-md">
                   Most Popular For Bounty Hunters
                 </div>
               )}
@@ -136,7 +136,7 @@ export default function PricingPage() {
               <div>
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-lg text-foreground">{plan.name}</h3>
-                  {plan.id === 'pro' && <Sparkles className="h-5 w-5 text-emerald-400 animate-pulse" />}
+                  {plan.id === 'pro' && <Sparkles className="h-5 w-5 text-primary animate-pulse" />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1.5 min-h-[36px]">{plan.tagline}</p>
 
@@ -158,7 +158,7 @@ export default function PricingPage() {
                         className={`flex items-start gap-2.5 ${
                           f.included
                             ? f.highlight
-                              ? 'text-emerald-400 font-medium'
+                              ? 'text-primary font-medium'
                               : 'text-foreground/90'
                             : 'text-muted-foreground/40 line-through'
                         }`}
@@ -167,8 +167,8 @@ export default function PricingPage() {
                           className={`h-4 w-4 shrink-0 mt-0.5 ${
                             f.included
                               ? f.highlight
-                                ? 'text-emerald-400'
-                                : 'text-emerald-500/80'
+                                ? 'text-primary'
+                                : 'text-primary/80'
                               : 'text-muted-foreground/30'
                           }`}
                         />
@@ -199,7 +199,7 @@ export default function PricingPage() {
       <div className="rounded-2xl border border-border bg-gradient-to-br from-card via-card/90 to-card/50 p-6 sm:p-8 space-y-6 shadow-xl backdrop-blur-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border pb-5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <div className="p-2 rounded-lg bg-primary/10 border border-primary/30 text-primary">
               <Calculator className="h-5 w-5" />
             </div>
             <div>
@@ -207,7 +207,7 @@ export default function PricingPage() {
               <p className="text-xs text-muted-foreground">Calculate your estimated monthly earnings using GitScout Pro alerts</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-full self-start sm:self-auto">
+          <div className="flex items-center gap-1.5 text-xs text-primary font-bold bg-primary/10 border border-primary/20 px-3 py-1.5 rounded-full self-start sm:self-auto">
             <TrendingUp className="h-4 w-4" />
             <span>Est. Net ROI: +{roiPercentage}%</span>
           </div>
@@ -228,7 +228,7 @@ export default function PricingPage() {
                 step="1"
                 value={bountiesPerMonth}
                 onChange={(e) => setBountiesPerMonth(Number(e.target.value))}
-                className="w-full accent-emerald-500 cursor-pointer h-2 bg-muted rounded-lg"
+                className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>1 issue</span>
@@ -240,7 +240,7 @@ export default function PricingPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground font-semibold">Average Bounty Payout:</span>
-                <span className="font-extrabold text-emerald-400 text-sm">${avgBountyValue} USD</span>
+                <span className="font-extrabold text-primary text-sm">${avgBountyValue} USD</span>
               </div>
               <input
                 type="range"
@@ -249,7 +249,7 @@ export default function PricingPage() {
                 step="25"
                 value={avgBountyValue}
                 onChange={(e) => setAvgBountyValue(Number(e.target.value))}
-                className="w-full accent-emerald-500 cursor-pointer h-2 bg-muted rounded-lg"
+                className="w-full accent-primary cursor-pointer h-2 bg-muted rounded-lg"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>$50</span>
@@ -260,18 +260,18 @@ export default function PricingPage() {
           </div>
 
           {/* Result Card */}
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-6 flex flex-col justify-between space-y-4">
+          <div className="rounded-xl border border-primary/30 bg-primary/20 p-6 flex flex-col justify-between space-y-4">
             <div className="space-y-1">
-              <span className="text-[11px] uppercase font-bold text-emerald-400 tracking-wider">Estimated Net Profit</span>
+              <span className="text-[11px] uppercase font-bold text-primary tracking-wider">Estimated Net Profit</span>
               <div className="text-3xl sm:text-4xl font-extrabold text-foreground flex items-center">
-                <DollarSign className="h-7 w-7 text-emerald-400 -mr-1" />
+                <DollarSign className="h-7 w-7 text-primary -mr-1" />
                 <span>{netEarnings.toLocaleString()}</span>
                 <span className="text-xs text-muted-foreground ml-1">/ month</span>
               </div>
             </div>
 
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Based on solving <strong className="text-foreground">{bountiesPerMonth} bounties</strong> at an average of <strong className="text-emerald-400">${avgBountyValue}</strong> each, after deducting the GitScout Pro subscription (<strong className="text-foreground">${proMonthlyCost}/mo</strong>).
+              Based on solving <strong className="text-foreground">{bountiesPerMonth} bounties</strong> at an average of <strong className="text-primary">${avgBountyValue}</strong> each, after deducting the GitScout Pro subscription (<strong className="text-foreground">${proMonthlyCost}/mo</strong>).
             </p>
 
             <Button
@@ -296,7 +296,7 @@ export default function PricingPage() {
               onClick={() => setProvider('dodo')}
               className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
                 provider === 'dodo'
-                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold'
+                  ? 'border-primary bg-primary/20 text-primary font-bold'
                   : 'border-border bg-background text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -307,7 +307,7 @@ export default function PricingPage() {
               onClick={() => setProvider('lemonsqueezy')}
               className={`px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
                 provider === 'lemonsqueezy'
-                  ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300 font-bold'
+                  ? 'border-primary bg-primary/20 text-primary font-bold'
                   : 'border-border bg-background text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -318,11 +318,11 @@ export default function PricingPage() {
 
         <div className="flex items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <Shield className="h-4 w-4 text-emerald-400" />
+            <Shield className="h-4 w-4 text-primary" />
             <span>256-Bit SSL Encrypted</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <CreditCard className="h-4 w-4 text-emerald-400" />
+            <CreditCard className="h-4 w-4 text-primary" />
             <span>7-Day Money Back</span>
           </div>
         </div>
@@ -339,7 +339,7 @@ export default function PricingPage() {
           {faqs.map((faq, i) => (
             <div key={i} className="rounded-xl border border-border bg-card/60 p-5 space-y-2">
               <h4 className="font-semibold text-xs text-foreground flex items-center gap-2">
-                <HelpCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                <HelpCircle className="h-4 w-4 text-primary shrink-0" />
                 <span>{faq.q}</span>
               </h4>
               <p className="text-xs text-muted-foreground leading-relaxed pl-6">{faq.a}</p>

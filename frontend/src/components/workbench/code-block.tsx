@@ -34,16 +34,16 @@ export function CodeBlock({
   const lines = code.split('\n');
 
   return (
-    <div className="relative my-2 rounded-xl border border-zinc-800 bg-zinc-950 font-mono text-xs overflow-hidden shadow-xl">
+    <div className="relative my-2 rounded-xl border border-border bg-background font-mono text-xs overflow-hidden shadow-xl">
       {/* Mac-style Window Titlebar */}
-      <div className="flex items-center justify-between border-b border-zinc-800/80 bg-zinc-900/80 px-3.5 py-2 text-[11px] text-zinc-400">
+      <div className="flex items-center justify-between border-b border-border/80 bg-card/80 px-3.5 py-2 text-[11px] text-muted-foreground">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-500/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/80" />
-            <span className="h-2.5 w-2.5 rounded-full bg-green-500/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-destructive/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-bounty-gold/80" />
+            <span className="h-2.5 w-2.5 rounded-full bg-primary/80" />
           </div>
-          <span className="font-bold text-zinc-300 pl-1">
+          <span className="font-bold text-foreground pl-1">
             {filename || language.toUpperCase()}
           </span>
         </div>
@@ -51,18 +51,18 @@ export function CodeBlock({
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 hover:text-emerald-400 hover:bg-zinc-700 transition-all text-[10px]"
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-secondary text-foreground hover:text-primary hover:bg-muted transition-all text-[10px]"
         >
-          {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+          {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
 
       {/* Code Area */}
-      <div className="overflow-x-auto p-4 text-zinc-200 leading-relaxed font-mono">
+      <div className="overflow-x-auto p-4 text-foreground leading-relaxed font-mono">
         <pre className="flex text-xs">
           {showLineNumbers && (
-            <div className="select-none pr-4 text-right text-zinc-600 font-mono select-none">
+            <div className="select-none pr-4 text-right text-muted-foreground font-mono select-none">
               {lines.map((_, i) => (
                 <div key={i}>{i + 1}</div>
               ))}

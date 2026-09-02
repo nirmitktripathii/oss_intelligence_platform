@@ -48,14 +48,14 @@ export default async function IssueWorkbenchPage({ params }: IssuePageProps) {
   const roiTier = getRoiTier(issue.hourlyRoiUsd);
 
   return (
-    <div className="container py-8 max-w-5xl space-y-6 font-mono text-zinc-100">
+    <div className="container py-8 max-w-5xl space-y-6 font-mono text-foreground">
       {/* Schema.org Structured Data */}
       <IssueJsonLd issue={issue} />
 
       {/* Back Navigation Bar */}
       <div className="flex items-center justify-between">
         <Link href="/">
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs text-zinc-400 hover:text-white">
+          <Button variant="outline" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground">
             <ChevronLeft className="h-4 w-4" />
             <span>Back to Issue Terminal</span>
           </Button>
@@ -88,21 +88,21 @@ export default async function IssueWorkbenchPage({ params }: IssuePageProps) {
       </div>
 
       {/* Main Header Banner */}
-      <div className="rounded-xl border border-zinc-800 bg-zinc-950/90 p-6 space-y-4 shadow-xl">
-        <div className="flex items-center justify-between text-xs text-zinc-400">
+      <div className="rounded-xl border border-border bg-background/90 p-6 space-y-4 shadow-xl">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            <span className="text-zinc-500">{issue.repository.owner} /</span>
-            <span className="font-bold text-zinc-200">{issue.repository.name}</span>
-            <span className="text-emerald-400 font-bold">#{issue.githubIssueNumber}</span>
+            <span className="text-muted-foreground">{issue.repository.owner} /</span>
+            <span className="font-bold text-foreground">{issue.repository.name}</span>
+            <span className="text-primary font-bold">#{issue.githubIssueNumber}</span>
           </div>
 
           <div className="flex items-center gap-1">
-            <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+            <Star className="h-3.5 w-3.5 text-bounty-gold fill-bounty-gold" />
             <span>{(issue.repository.stars / 1000).toFixed(1)}k stars</span>
           </div>
         </div>
 
-        <h1 className="text-lg sm:text-xl font-bold text-zinc-100 leading-snug">
+        <h1 className="text-lg sm:text-xl font-bold text-foreground leading-snug">
           {issue.title}
         </h1>
 
@@ -113,13 +113,13 @@ export default async function IssueWorkbenchPage({ params }: IssuePageProps) {
           <span className={`px-2 py-0.5 rounded border ${diffInfo.badgeClass}`}>
             {diffInfo.label}
           </span>
-          <span className="flex items-center gap-1 text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-            <Clock className="h-3 w-3 text-zinc-500" />
+          <span className="flex items-center gap-1 text-muted-foreground bg-card px-2 py-0.5 rounded border border-border">
+            <Clock className="h-3 w-3 text-muted-foreground" />
             <span>Est. ~{formatTimeMinutes(issue.estimatedMinutesToSolve)}</span>
           </span>
 
           {issue.bounty && issue.bounty.isFunded && (
-            <span className="flex items-center gap-1 text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/40">
+            <span className="flex items-center gap-1 text-bounty-gold font-bold bg-bounty-gold/15 px-2 py-0.5 rounded border border-bounty-gold/40">
               <Coins className="h-3.5 w-3.5" />
               <span>${issue.bounty.amountUsd} Bounty</span>
             </span>

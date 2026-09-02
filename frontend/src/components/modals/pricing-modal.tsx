@@ -38,29 +38,29 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl border-zinc-800 bg-zinc-950/95 font-mono text-zinc-100 p-6 overflow-y-auto max-h-[90vh]">
+      <DialogContent className="max-w-4xl border-border bg-background/95 font-mono text-foreground p-6 overflow-y-auto max-h-[90vh]">
         <DialogHeader className="text-center sm:text-center">
-          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 mb-2">
+          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/20 border border-primary/40 text-primary mb-2">
             <Zap className="h-5 w-5" />
           </div>
-          <DialogTitle className="text-xl font-bold text-zinc-100">
+          <DialogTitle className="text-xl font-bold text-foreground">
             Upgrade to GitScout Pro & Team Terminal
           </DialogTitle>
-          <DialogDescription className="text-xs text-zinc-400 max-w-lg mx-auto">
+          <DialogDescription className="text-xs text-muted-foreground max-w-lg mx-auto">
             Unlock sub-60s zero-latency alerts, private Telegram/Discord bots, full AST blast radius graphs, and 4-step PR blueprints.
           </DialogDescription>
         </DialogHeader>
 
         {/* Billing cycle toggle */}
         <div className="flex items-center justify-center gap-3 pt-2">
-          <div className="inline-flex rounded-lg border border-zinc-800 bg-zinc-900/80 p-1 text-xs">
+          <div className="inline-flex rounded-lg border border-border bg-card/80 p-1 text-xs">
             <button
               type="button"
               onClick={() => setBillingCycle('monthly')}
               className={`px-3 py-1 rounded transition-colors ${
                 billingCycle === 'monthly'
-                  ? 'bg-zinc-800 text-white font-medium shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-secondary text-foreground font-medium shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               Monthly Billing
@@ -70,12 +70,12 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
               onClick={() => setBillingCycle('annual')}
               className={`px-3 py-1 rounded transition-colors flex items-center gap-1.5 ${
                 billingCycle === 'annual'
-                  ? 'bg-emerald-600 text-white font-medium shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-primary text-primary-foreground font-medium shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               <span>Annual Billing</span>
-              <span className="rounded bg-emerald-400/20 px-1 py-0.2 text-[10px] text-emerald-200 font-bold uppercase">
+              <span className="rounded bg-primary/20 px-1 py-0.2 text-[10px] text-primary font-bold uppercase">
                 Save 20%
               </span>
             </button>
@@ -94,32 +94,32 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                 key={plan.id}
                 className={`relative flex flex-col justify-between rounded-xl border p-5 transition-all ${
                   isPopular
-                    ? 'border-emerald-500/70 bg-gradient-to-b from-emerald-950/20 to-zinc-950 shadow-[0_0_25px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/50'
-                    : 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-700'
+                    ? 'border-primary/70 bg-gradient-to-b from-primary/20 to-background shadow-[0_0_25px_hsl(var(--primary)/0.15)] ring-1 ring-primary/50'
+                    : 'border-border bg-card/40 hover:border-border'
                 }`}
               >
                 {isPopular && (
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-black">
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">
                     Most Popular
                   </div>
                 )}
 
                 <div>
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold text-sm text-zinc-100">{plan.name}</h3>
-                    {plan.id === 'pro' && <Sparkles className="h-4 w-4 text-emerald-400" />}
+                    <h3 className="font-bold text-sm text-foreground">{plan.name}</h3>
+                    {plan.id === 'pro' && <Sparkles className="h-4 w-4 text-primary" />}
                   </div>
-                  <p className="text-[11px] text-zinc-400 mt-1 min-h-[32px]">{plan.tagline}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1 min-h-[32px]">{plan.tagline}</p>
 
                   <div className="mt-4 mb-4 flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-zinc-100">${price}</span>
-                    <span className="text-xs text-zinc-400">
+                    <span className="text-3xl font-extrabold text-foreground">${price}</span>
+                    <span className="text-xs text-muted-foreground">
                       /month {billingCycle === 'annual' && plan.priceMonthlyUsd > 0 ? '(billed annually)' : ''}
                     </span>
                   </div>
 
-                  <div className="space-y-2 border-t border-zinc-800/80 pt-3">
-                    <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
+                  <div className="space-y-2 border-t border-border/80 pt-3">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
                       Included Capabilities:
                     </span>
                     <ul className="space-y-2 text-xs">
@@ -129,18 +129,18 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                           className={`flex items-start gap-2 ${
                             f.included
                               ? f.highlight
-                                ? 'text-emerald-300 font-medium'
-                                : 'text-zinc-300'
-                              : 'text-zinc-600 line-through'
+                                ? 'text-primary font-medium'
+                                : 'text-foreground'
+                              : 'text-muted-foreground line-through'
                           }`}
                         >
                           <Check
                             className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${
                               f.included
                                 ? f.highlight
-                                  ? 'text-emerald-400'
-                                  : 'text-zinc-400'
-                              : 'text-zinc-700'
+                                  ? 'text-primary'
+                                  : 'text-muted-foreground'
+                              : 'text-muted-foreground'
                             }`}
                           />
                           <span className="text-[11px] leading-tight">{f.title}</span>
@@ -167,7 +167,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
         </div>
 
         {/* Payment provider & trust bar */}
-        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-zinc-800/80 pt-4 text-xs text-zinc-400 gap-3">
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between border-t border-border/80 pt-4 text-xs text-muted-foreground gap-3">
           <div className="flex items-center gap-3">
             <span className="text-[11px]">Payment Gateway:</span>
             <div className="flex items-center gap-2">
@@ -176,8 +176,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                 onClick={() => setProvider('dodo')}
                 className={`px-2 py-0.5 rounded border text-[11px] font-mono ${
                   provider === 'dodo'
-                    ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                    : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                    ? 'border-primary bg-primary/20 text-primary'
+                    : 'border-border bg-card text-muted-foreground'
                 }`}
               >
                 Dodo Payments (Card/UPI/Crypto)
@@ -187,8 +187,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                 onClick={() => setProvider('lemonsqueezy')}
                 className={`px-2 py-0.5 rounded border text-[11px] font-mono ${
                   provider === 'lemonsqueezy'
-                    ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                    : 'border-zinc-800 bg-zinc-900 text-zinc-400'
+                    ? 'border-primary bg-primary/20 text-primary'
+                    : 'border-border bg-card text-muted-foreground'
                 }`}
               >
                 Lemon Squeezy
@@ -196,13 +196,13 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+          <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1">
-              <Shield className="h-3.5 w-3.5 text-emerald-400" />
+              <Shield className="h-3.5 w-3.5 text-primary" />
               <span>256-Bit SSL</span>
             </div>
             <div className="flex items-center gap-1">
-              <CreditCard className="h-3.5 w-3.5 text-emerald-400" />
+              <CreditCard className="h-3.5 w-3.5 text-primary" />
               <span>Cancel Anytime</span>
             </div>
           </div>

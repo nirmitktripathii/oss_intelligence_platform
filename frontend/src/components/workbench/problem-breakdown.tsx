@@ -82,12 +82,12 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
   }, [report?.affectedSubsystems]);
 
   return (
-    <div className="space-y-4 font-mono text-xs text-zinc-300">
+    <div className="space-y-4 font-mono text-xs text-foreground">
       {/* 1. AI Diagnostic & Root Cause Card */}
-      <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/20 via-zinc-900/60 to-zinc-950 p-5 shadow-xl space-y-3.5">
+      <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/20 via-card/60 to-background p-5 shadow-xl space-y-3.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
-            <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-emerald-500/20 text-emerald-400">
+          <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+            <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-primary/20 text-primary">
               <Sparkles className="h-3.5 w-3.5" />
             </span>
             <span>AI Diagnostic & Root Cause Breakdown</span>
@@ -102,8 +102,8 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
           <span
             className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider border ${
               enhanced
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                : 'border-zinc-700 bg-zinc-900 text-zinc-400'
+                ? 'border-primary/40 bg-primary/10 text-primary'
+                : 'border-border bg-card text-muted-foreground'
             }`}
           >
             {enhanced ? <Sparkles className="h-3 w-3" /> : <Cpu className="h-3 w-3" />}
@@ -111,13 +111,13 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
           </span>
         </div>
 
-        <p className="text-xs sm:text-sm text-zinc-200 leading-relaxed font-sans font-normal tracking-wide">
+        <p className="text-xs sm:text-sm text-foreground leading-relaxed font-sans font-normal tracking-wide">
           {report?.rootCauseAnalysis ||
             `Issue involves behavioral edge-case reported in '${issue.title}'. Automated triage isolated candidate source files and structural reproduction steps.`}
         </p>
 
-        <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/80 text-[11px] text-zinc-400">
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+        <div className="flex items-center gap-2 pt-1 border-t border-border/80 text-[11px] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 text-primary shrink-0" />
           <span>
             {enhanced
               ? `Semantic analysis via ${provider ?? 'LLM'} over AST-localized candidate files`
@@ -126,20 +126,20 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
         </div>
 
         {enhanced && groundedFiles.length > 0 && (
-          <div className="flex items-start gap-2 text-[11px] text-emerald-300/90">
-            <FileText className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 text-[11px] text-primary/90">
+            <FileText className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
             <span>
               Grounded in real source:{' '}
-              <span className="font-semibold text-emerald-200">{groundedFiles.join(', ')}</span>
+              <span className="font-semibold text-primary">{groundedFiles.join(', ')}</span>
             </span>
           </div>
         )}
       </div>
 
       {/* 2. Affected Subsystems & Blast Radius */}
-      <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-purple-950/20 via-zinc-900/60 to-zinc-950 p-5 shadow-xl space-y-3">
-        <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
-          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-purple-500/20 text-purple-400">
+      <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 via-card/60 to-background p-5 shadow-xl space-y-3">
+        <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-accent/20 text-accent">
             <Layers className="h-3.5 w-3.5" />
           </span>
           <span>Affected Subsystems & Blast Radius</span>
@@ -150,15 +150,15 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
             {subsystems.map((sub) => (
               <span
                 key={sub}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-xs text-purple-200 font-semibold shadow-sm"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-accent font-semibold shadow-sm"
               >
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                <span className="h-1.5 w-1.5 rounded-full bg-accent" />
                 <span>{sub}</span>
               </span>
             ))}
           </div>
         ) : (
-          <p className="text-[11px] text-zinc-500 pt-1 font-sans leading-relaxed">
+          <p className="text-[11px] text-muted-foreground pt-1 font-sans leading-relaxed">
             Subsystem mapping is produced by AI-enhanced triage. This report used deterministic AST
             localization — the localized files below trace the blast radius.
           </p>
@@ -166,9 +166,9 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
       </div>
 
       {/* 3. Upstream CONTRIBUTING Guidelines */}
-      <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-blue-950/20 via-zinc-900/60 to-zinc-950 p-5 shadow-xl space-y-3.5">
-        <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
-          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-blue-500/20 text-blue-400">
+      <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 via-card/60 to-background p-5 shadow-xl space-y-3.5">
+        <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-accent/20 text-accent">
             <FileText className="h-3.5 w-3.5" />
           </span>
           <span>Upstream CONTRIBUTING.md Guidelines</span>
@@ -178,9 +178,9 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
           {guidelines.map((guide, i) => (
             <div
               key={i}
-              className="flex items-start gap-2.5 p-2.5 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-xs text-zinc-200"
+              className="flex items-start gap-2.5 p-2.5 rounded-xl bg-card/80 border border-border/80 text-xs text-foreground"
             >
-              <CheckCircle2 className="h-4 w-4 text-blue-400 shrink-0 mt-0.5" />
+              <CheckCircle2 className="h-4 w-4 text-accent shrink-0 mt-0.5" />
               <span className="leading-relaxed font-sans">{guide}</span>
             </div>
           ))}
@@ -188,9 +188,9 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
       </div>
 
       {/* 4. Recommended Branch & PR Formatting */}
-      <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-zinc-900/60 to-zinc-950 p-5 shadow-xl space-y-3.5">
-        <div className="flex items-center gap-2 text-zinc-100 font-bold text-sm">
-          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-amber-500/20 text-amber-400">
+      <div className="rounded-2xl border border-bounty-gold/30 bg-gradient-to-br from-bounty-gold/20 via-card/60 to-background p-5 shadow-xl space-y-3.5">
+        <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-bounty-gold/20 text-bounty-gold">
             <GitBranch className="h-3.5 w-3.5" />
           </span>
           <span>Recommended Branch & PR Formatting</span>
@@ -198,12 +198,12 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
 
         <div className="space-y-2.5 pt-1">
           {/* Branch Command Card */}
-          <div className="flex items-center justify-between gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800 shadow-inner">
+          <div className="flex items-center justify-between gap-3 bg-background p-3 rounded-xl border border-border shadow-inner">
             <div className="truncate">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-bold">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-bold">
                 Git Checkout Branch
               </span>
-              <code className="text-xs text-emerald-400 font-bold block truncate">
+              <code className="text-xs text-primary font-bold block truncate">
                 git checkout -b {branchName}
               </code>
             </div>
@@ -211,20 +211,20 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
               variant="outline"
               size="sm"
               onClick={() => handleCopy(`git checkout -b ${branchName}`, 'branch')}
-              className="h-7 text-[11px] gap-1 text-zinc-300 border-zinc-700 bg-zinc-900 hover:bg-zinc-800 shrink-0"
+              className="h-7 text-[11px] gap-1 text-foreground border-border bg-card hover:bg-secondary shrink-0"
             >
-              {copiedBranch ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              {copiedBranch ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
               <span>{copiedBranch ? 'Copied' : 'Copy'}</span>
             </Button>
           </div>
 
           {/* Suggested PR Title Card */}
-          <div className="flex items-center justify-between gap-3 bg-zinc-950 p-3 rounded-xl border border-zinc-800 shadow-inner">
+          <div className="flex items-center justify-between gap-3 bg-background p-3 rounded-xl border border-border shadow-inner">
             <div className="truncate">
-              <span className="text-[10px] text-zinc-500 uppercase tracking-wider block font-bold">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-bold">
                 Conventional PR Title
               </span>
-              <code className="text-xs text-zinc-200 font-bold block truncate">
+              <code className="text-xs text-foreground font-bold block truncate">
                 {prTitle}
               </code>
             </div>
@@ -232,9 +232,9 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
               variant="outline"
               size="sm"
               onClick={() => handleCopy(prTitle, 'title')}
-              className="h-7 text-[11px] gap-1 text-zinc-300 border-zinc-700 bg-zinc-900 hover:bg-zinc-800 shrink-0"
+              className="h-7 text-[11px] gap-1 text-foreground border-border bg-card hover:bg-secondary shrink-0"
             >
-              {copiedTitle ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+              {copiedTitle ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
               <span>{copiedTitle ? 'Copied' : 'Copy'}</span>
             </Button>
           </div>

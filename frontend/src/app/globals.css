@@ -2,68 +2,362 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * GitScout terminal skins — 5 skins x light/dark = 10 looks.
+ * Mode (light/dark) is driven by next-themes via the `.light` / `.dark`
+ * class on <html>; skin is driven by the `data-skin` attribute on <html>.
+ * Bare :root is the hard default => Tokyo Night, dark.
+ * Palette values are HSL triplets so Tailwind's hsl(var(--token)) tokens work.
+ * --glow / --shadow / --atmos are raw (used directly, not via hsl()).
+ */
+
 @layer base {
+  /* ===== DEFAULT (Tokyo Night — dark) ===== */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 98%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 158 64% 40%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 158 64% 40%;
-    --radius: 0.5rem;
+    --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --radius: 11px;
+    --background: 240 15% 10%;
+    --foreground: 229 73% 86%;
+    --card: 235 19% 13%;
+    --card-foreground: 229 73% 86%;
+    --popover: 235 19% 13%;
+    --popover-foreground: 229 73% 86%;
+    --primary: 221 89% 72%;
+    --primary-foreground: 234 22% 9%;
+    --secondary: 232 19% 15%;
+    --secondary-foreground: 229 73% 86%;
+    --muted: 232 19% 15%;
+    --muted-foreground: 230 25% 60%;
+    --accent: 261 85% 79%;
+    --accent-foreground: 234 22% 9%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 25% 20%;
+    --input: 228 23% 25%;
+    --ring: 221 89% 72%;
+    --bounty-gold: 36 66% 64%;
+    --glow: rgba(122,162,247,.24);
+    --shadow: 0 8px 26px rgba(0,0,0,.4);
+    --atmos: radial-gradient(50% 42% at 16% -6%, rgba(122,162,247,.18), transparent 68%), radial-gradient(52% 44% at 92% 6%, rgba(187,154,247,.14), transparent 70%), radial-gradient(40% 40% at 60% 108%, rgba(125,207,255,.10), transparent 70%);
 
-    /* GitScout Custom Semantic Badges */
-    --badge-ai: 262 83% 58%;
-    --badge-data: 199 89% 48%;
-    --badge-web: 142 71% 45%;
-    --badge-cloud: 217 91% 60%;
-    --badge-sec: 0 84% 60%;
-    --badge-sys: 38 92% 50%;
-    --bounty-gold: 45 93% 47%;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 5.5%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 5.5%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 158 64% 45%;
-    --primary-foreground: 240 10% 3.9%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 158 64% 45%;
-
-    /* Dark Theme Accents */
+    /* Domain badge hues — skin-independent, dark-mode calibration */
     --badge-ai: 263 70% 68%;
     --badge-data: 198 93% 60%;
     --badge-web: 150 60% 55%;
     --badge-cloud: 213 94% 68%;
     --badge-sec: 0 91% 71%;
     --badge-sys: 41 96% 64%;
-    --bounty-gold: 45 93% 58%;
+  }
+
+  /* Light-mode calibration for skin-independent badge hues */
+  .light {
+    --badge-ai: 262 83% 58%;
+    --badge-data: 199 89% 48%;
+    --badge-web: 142 71% 45%;
+    --badge-cloud: 217 91% 60%;
+    --badge-sec: 0 84% 60%;
+    --badge-sys: 38 92% 50%;
+  }
+
+  /* ===== TOKYO — dark ===== */
+  [data-skin='tokyo'].dark {
+    --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --radius: 11px;
+    --background: 240 15% 10%;
+    --foreground: 229 73% 86%;
+    --card: 235 19% 13%;
+    --card-foreground: 229 73% 86%;
+    --popover: 235 19% 13%;
+    --popover-foreground: 229 73% 86%;
+    --primary: 221 89% 72%;
+    --primary-foreground: 234 22% 9%;
+    --secondary: 232 19% 15%;
+    --secondary-foreground: 229 73% 86%;
+    --muted: 232 19% 15%;
+    --muted-foreground: 230 25% 60%;
+    --accent: 261 85% 79%;
+    --accent-foreground: 234 22% 9%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 25% 20%;
+    --input: 228 23% 25%;
+    --ring: 221 89% 72%;
+    --bounty-gold: 36 66% 64%;
+    --glow: rgba(122,162,247,.24);
+    --shadow: 0 8px 26px rgba(0,0,0,.4);
+    --atmos: radial-gradient(50% 42% at 16% -6%, rgba(122,162,247,.18), transparent 68%), radial-gradient(52% 44% at 92% 6%, rgba(187,154,247,.14), transparent 70%), radial-gradient(40% 40% at 60% 108%, rgba(125,207,255,.10), transparent 70%);
+  }
+
+  /* ===== TOKYO — light ===== */
+  [data-skin='tokyo'].light {
+    --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --radius: 11px;
+    --background: 230 11% 89%;
+    --foreground: 228 26% 27%;
+    --card: 240 20% 95%;
+    --card-foreground: 228 26% 27%;
+    --popover: 240 20% 95%;
+    --popover-foreground: 228 26% 27%;
+    --primary: 218 45% 37%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 26% 91%;
+    --secondary-foreground: 228 26% 27%;
+    --muted: 230 26% 91%;
+    --muted-foreground: 231 11% 47%;
+    --accent: 261 39% 40%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 228 19% 85%;
+    --input: 230 22% 79%;
+    --ring: 218 45% 37%;
+    --bounty-gold: 36 74% 32%;
+    --glow: rgba(52,84,138,.15);
+    --shadow: 0 8px 22px rgba(52,84,138,.10);
+    --atmos: radial-gradient(50% 42% at 16% -8%, rgba(52,84,138,.10), transparent 66%), radial-gradient(50% 44% at 92% 4%, rgba(90,62,142,.08), transparent 70%);
+  }
+
+  /* ===== PHOSPHOR — dark ===== */
+  [data-skin='phosphor'].dark {
+    --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 13px;
+    --background: 225 22% 4%;
+    --foreground: 208 35% 93%;
+    --card: 225 22% 7%;
+    --card-foreground: 208 35% 93%;
+    --popover: 225 22% 7%;
+    --popover-foreground: 208 35% 93%;
+    --primary: 160 84% 39%;
+    --primary-foreground: 157 69% 5%;
+    --secondary: 224 22% 10%;
+    --secondary-foreground: 208 35% 93%;
+    --muted: 224 22% 10%;
+    --muted-foreground: 214 11% 54%;
+    --accent: 172 66% 50%;
+    --accent-foreground: 157 69% 5%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 21% 14%;
+    --input: 219 19% 20%;
+    --ring: 160 84% 39%;
+    --bounty-gold: 44 99% 48%;
+    --glow: rgba(16,185,129,.22);
+    --shadow: 0 6px 22px rgba(0,0,0,.45);
+    --atmos: radial-gradient(58% 46% at 88% -4%, rgba(16,185,129,.16), transparent 70%), radial-gradient(48% 40% at 4% 102%, rgba(6,182,212,.10), transparent 70%), repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 3px);
+  }
+
+  /* ===== PHOSPHOR — light ===== */
+  [data-skin='phosphor'].light {
+    --font-sans: 'JetBrains Mono', ui-monospace, monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 13px;
+    --background: 120 13% 95%;
+    --foreground: 158 24% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 158 24% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 158 24% 7%;
+    --primary: 162 94% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 120 10% 92%;
+    --secondary-foreground: 158 24% 7%;
+    --muted: 120 10% 92%;
+    --muted-foreground: 147 6% 35%;
+    --accent: 175 77% 26%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 130 10% 88%;
+    --input: 135 8% 80%;
+    --ring: 162 94% 30%;
+    --bounty-gold: 36 71% 42%;
+    --glow: rgba(5,150,106,.16);
+    --shadow: 0 6px 20px rgba(20,60,45,.08);
+    --atmos: radial-gradient(56% 44% at 88% -6%, rgba(5,150,106,.10), transparent 68%), radial-gradient(44% 38% at 2% 104%, rgba(15,118,110,.06), transparent 70%);
+  }
+
+  /* ===== AMBER CRT — dark ===== */
+  [data-skin='amber'].dark {
+    --font-sans: 'VT323', 'IBM Plex Mono', monospace;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --radius: 4px;
+    --background: 37 57% 5%;
+    --foreground: 36 100% 74%;
+    --card: 38 73% 6%;
+    --card-foreground: 36 100% 74%;
+    --popover: 38 73% 6%;
+    --popover-foreground: 36 100% 74%;
+    --primary: 41 100% 50%;
+    --primary-foreground: 38 73% 6%;
+    --secondary: 39 70% 8%;
+    --secondary-foreground: 36 100% 74%;
+    --muted: 39 70% 8%;
+    --muted-foreground: 36 42% 50%;
+    --accent: 25 100% 55%;
+    --accent-foreground: 38 73% 6%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 36 49% 15%;
+    --input: 36 50% 20%;
+    --ring: 41 100% 50%;
+    --bounty-gold: 48 100% 55%;
+    --glow: rgba(255,176,0,.28);
+    --shadow: 0 6px 22px rgba(0,0,0,.5);
+    --atmos: radial-gradient(60% 50% at 50% -8%, rgba(255,176,0,.14), transparent 66%), radial-gradient(120% 90% at 50% 50%, transparent 55%, rgba(0,0,0,.5)), repeating-linear-gradient(0deg, rgba(255,176,0,.05) 0 1px, transparent 1px 3px);
+  }
+
+  /* ===== AMBER CRT — light ===== */
+  [data-skin='amber'].light {
+    --font-sans: 'VT323', 'IBM Plex Mono', monospace;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --radius: 4px;
+    --background: 41 55% 90%;
+    --foreground: 41 76% 13%;
+    --card: 42 74% 94%;
+    --card-foreground: 41 76% 13%;
+    --popover: 42 74% 94%;
+    --popover-foreground: 41 76% 13%;
+    --primary: 26 90% 37%;
+    --primary-foreground: 37 100% 96%;
+    --secondary: 41 52% 86%;
+    --secondary-foreground: 41 76% 13%;
+    --muted: 41 52% 86%;
+    --muted-foreground: 42 39% 35%;
+    --accent: 17 88% 40%;
+    --accent-foreground: 37 100% 96%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 41 44% 76%;
+    --input: 42 39% 65%;
+    --ring: 26 90% 37%;
+    --bounty-gold: 35 92% 33%;
+    --glow: rgba(180,83,9,.16);
+    --shadow: 0 6px 18px rgba(120,80,10,.10);
+    --atmos: radial-gradient(60% 46% at 50% -8%, rgba(180,83,9,.09), transparent 66%), radial-gradient(120% 90% at 50% 50%, transparent 62%, rgba(120,80,10,.06));
+  }
+
+  /* ===== BRUTALIST — dark ===== */
+  [data-skin='brutalist'].dark {
+    --font-sans: 'Archivo', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 0px;
+    --background: 0 0% 4%;
+    --foreground: 43 26% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 43 26% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 43 26% 95%;
+    --primary: 12 100% 60%;
+    --primary-foreground: 13 100% 4%;
+    --secondary: 0 0% 11%;
+    --secondary-foreground: 43 26% 95%;
+    --muted: 0 0% 11%;
+    --muted-foreground: 45 6% 58%;
+    --accent: 50 100% 50%;
+    --accent-foreground: 13 100% 4%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 27%;
+    --ring: 12 100% 60%;
+    --bounty-gold: 50 100% 50%;
+    --glow: rgba(255,92,53,.22);
+    --shadow: 4px 4px 0 rgba(255,255,255,.10);
+    --atmos: linear-gradient(rgba(255,255,255,.028) 1px, transparent 1px) 0 0/34px 34px, linear-gradient(90deg, rgba(255,255,255,.028) 1px, transparent 1px) 0 0/34px 34px;
+  }
+
+  /* ===== BRUTALIST — light ===== */
+  [data-skin='brutalist'].light {
+    --font-sans: 'Archivo', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 0px;
+    --background: 48 26% 93%;
+    --foreground: 0 0% 4%;
+    --card: 47 39% 95%;
+    --card-foreground: 0 0% 4%;
+    --popover: 47 39% 95%;
+    --popover-foreground: 0 0% 4%;
+    --primary: 9 75% 48%;
+    --primary-foreground: 47 69% 97%;
+    --secondary: 47 23% 88%;
+    --secondary-foreground: 0 0% 4%;
+    --muted: 47 23% 88%;
+    --muted-foreground: 46 8% 31%;
+    --accent: 45 100% 39%;
+    --accent-foreground: 47 69% 97%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 4%;
+    --input: 0 0% 4%;
+    --ring: 0 0% 4%;
+    --bounty-gold: 41 100% 30%;
+    --glow: rgba(11,11,11,.14);
+    --shadow: 5px 5px 0 #0b0b0b;
+    --atmos: linear-gradient(rgba(11,11,11,.05) 1px, transparent 1px) 0 0/30px 30px, linear-gradient(90deg, rgba(11,11,11,.05) 1px, transparent 1px) 0 0/30px 30px;
+  }
+
+  /* ===== ROSÉ PINE — dark ===== */
+  [data-skin='rosepine'].dark {
+    --font-sans: 'Fraunces', Georgia, serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 14px;
+    --background: 249 22% 12%;
+    --foreground: 245 50% 91%;
+    --card: 247 23% 15%;
+    --card-foreground: 245 50% 91%;
+    --popover: 247 23% 15%;
+    --popover-foreground: 245 50% 91%;
+    --primary: 189 43% 73%;
+    --primary-foreground: 250 24% 10%;
+    --secondary: 248 25% 18%;
+    --secondary-foreground: 245 50% 91%;
+    --muted: 248 25% 18%;
+    --muted-foreground: 248 15% 61%;
+    --accent: 267 57% 78%;
+    --accent-foreground: 250 24% 10%;
+    --destructive: 350 89% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 250 19% 19%;
+    --input: 249 15% 28%;
+    --ring: 189 43% 73%;
+    --bounty-gold: 35 88% 72%;
+    --glow: rgba(156,207,216,.24);
+    --shadow: 0 8px 26px rgba(11,9,20,.5);
+    --atmos: radial-gradient(52% 42% at 12% -6%, rgba(196,167,231,.17), transparent 68%), radial-gradient(50% 42% at 92% 4%, rgba(235,111,146,.13), transparent 70%), radial-gradient(44% 40% at 62% 108%, rgba(156,207,216,.11), transparent 70%);
+  }
+
+  /* ===== ROSÉ PINE — light ===== */
+  [data-skin='rosepine'].light {
+    --font-sans: 'Fraunces', Georgia, serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    --radius: 14px;
+    --background: 32 57% 95%;
+    --foreground: 248 19% 40%;
+    --card: 35 100% 98%;
+    --card-foreground: 248 19% 40%;
+    --popover: 35 100% 98%;
+    --popover-foreground: 248 19% 40%;
+    --primary: 189 30% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 28 40% 92%;
+    --secondary-foreground: 248 19% 40%;
+    --muted: 28 40% 92%;
+    --muted-foreground: 248 12% 52%;
+    --accent: 268 21% 57%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 30 23% 86%;
+    --input: 315 4% 80%;
+    --ring: 189 30% 48%;
+    --bounty-gold: 38 87% 37%;
+    --glow: rgba(86,148,159,.17);
+    --shadow: 0 8px 22px rgba(87,82,121,.10);
+    --atmos: radial-gradient(52% 42% at 12% -8%, rgba(144,122,169,.13), transparent 66%), radial-gradient(50% 42% at 92% 4%, rgba(180,99,122,.10), transparent 70%), radial-gradient(44% 40% at 62% 108%, rgba(86,148,159,.08), transparent 70%);
   }
 }
 
@@ -74,6 +368,16 @@
   body {
     @apply bg-background text-foreground font-mono antialiased;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Atmospheric layered background — driven per-skin by --atmos */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: var(--atmos);
   }
 }
 
@@ -98,28 +402,28 @@
   background-size: 100% 4px;
 }
 
-/* Emerald glow shadow */
+/* Primary glow shadow — follows the active skin */
 .emerald-glow {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 20px var(--glow);
 }
 
-/* Gold glow shadow */
+/* Bounty glow shadow — follows the active skin */
 .gold-glow {
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+  box-shadow: 0 0 20px hsl(var(--bounty-gold) / 0.3);
 }
 
-/* Custom Scrollbar for Hacker Aesthetic */
+/* Custom Scrollbar — theme-aware */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #09090b;
+  background: hsl(var(--background));
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272a;
+  background: hsl(var(--border));
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #10b981;
+  background: hsl(var(--primary));
 }
