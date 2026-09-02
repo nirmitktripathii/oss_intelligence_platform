@@ -262,7 +262,8 @@ class LLMTriageEngine:
             )
             if resp.status_code == 200:
                 return resp.json()["choices"][0]["message"]["content"]
-            logger.warning("[LLM] %s returned HTTP %s", provider, resp.status_code)
+            # Body carries the real reason (bad model, quota, auth) — truncate to stay log-safe.
+            logger.warning("[LLM] %s returned HTTP %s: %s", provider, resp.status_code, resp.text[:500])
         return None
 
     @classmethod
@@ -287,7 +288,8 @@ class LLMTriageEngine:
             if resp.status_code == 200:
                 data = resp.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
-            logger.warning("[LLM] gemini returned HTTP %s", resp.status_code)
+            # Body carries the real reason (bad model, quota, auth) — truncate to stay log-safe.
+            logger.warning("[LLM] gemini returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None
 
     @classmethod
@@ -312,6 +314,8 @@ class LLMTriageEngine:
             )
             if resp.status_code == 200:
                 return resp.json().get("response")
+            # Body carries the real reason (bad model, unreachable host) — truncate to stay log-safe.
+            logger.warning("[LLM] ollama returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None
 
     # ------------------------------------------------------------------ #
@@ -344,7 +348,9 @@ class LLMTriageEngine:
                 if text:
                     return text, f"{provider}:{model}"
             except Exception as exc:  # never let a provider failure escape — degrade to AST
-                logger.warning("[LLM] %s invocation failed: %s", provider, exc)
+                # %r so transport errors with an empty str() (httpx ReadTimeout/ConnectTimeout,
+                # which render as "") still name their type — otherwise prod is undiagnosable.
+                logger.warning("[LLM] %s invocation failed: %r", provider, exc)
         return None
 
     @classmethod
