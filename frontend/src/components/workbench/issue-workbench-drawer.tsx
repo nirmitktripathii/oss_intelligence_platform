@@ -82,22 +82,22 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
       <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
         <SheetContent
           side="right"
-          className="font-mono text-zinc-100 bg-zinc-950/98 border-l border-zinc-800/90 overflow-y-auto w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl p-6 sm:p-8 backdrop-blur-2xl shadow-2xl space-y-6"
+          className="font-mono text-foreground bg-background/98 border-l border-border/90 overflow-y-auto w-full sm:max-w-2xl md:max-w-3xl lg:max-w-4xl p-6 sm:p-8 backdrop-blur-2xl shadow-2xl space-y-6"
         >
           {/* Top Header Card */}
-          <SheetHeader className="border-b border-zinc-800/80 pb-6 space-y-4">
+          <SheetHeader className="border-b border-border/80 pb-6 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pr-8">
               {/* Repository Breadcrumb & Issue ID */}
               <div className="flex items-center gap-2.5 truncate">
-                <span className="flex items-center justify-center h-7 w-7 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400">
-                  <GitBranch className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="flex items-center justify-center h-7 w-7 rounded-lg bg-card border border-border text-muted-foreground">
+                  <GitBranch className="h-3.5 w-3.5 text-primary" />
                 </span>
                 <div className="flex items-center gap-1.5 text-sm">
-                  <span className="text-zinc-400 font-medium">{issue.repository.owner}</span>
-                  <span className="text-zinc-600 font-bold">/</span>
-                  <span className="font-bold text-zinc-100">{issue.repository.name}</span>
+                  <span className="text-muted-foreground font-medium">{issue.repository.owner}</span>
+                  <span className="text-muted-foreground font-bold">/</span>
+                  <span className="font-bold text-foreground">{issue.repository.name}</span>
                 </div>
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-primary/15 text-primary border border-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]">
                   #{issue.githubIssueNumber}
                 </span>
               </div>
@@ -108,21 +108,21 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                   variant="outline"
                   size="sm"
                   onClick={() => handleOpenGraph()}
-                  className="h-8 text-xs gap-1.5 text-purple-300 border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 transition-all"
+                  className="h-8 text-xs gap-1.5 text-accent border-accent/30 bg-accent/10 hover:bg-accent/20 transition-all"
                   title="Explore AST Knowledge Graph"
                 >
-                  <Network className="h-3.5 w-3.5 text-purple-400" />
+                  <Network className="h-3.5 w-3.5 text-accent" />
                   <span className="hidden sm:inline">AST Graph</span>
                 </Button>
 
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 text-xs gap-1.5 text-zinc-300 border-zinc-800 bg-zinc-900/80 hover:bg-zinc-800 transition-all"
+                  className="h-8 text-xs gap-1.5 text-foreground border-border bg-card/80 hover:bg-secondary transition-all"
                   onClick={() => setIsShareOpen(true)}
                   title="Share Blueprint"
                 >
-                  <Share2 className="h-3.5 w-3.5 text-zinc-400" />
+                  <Share2 className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="hidden sm:inline">Share</span>
                 </Button>
 
@@ -134,7 +134,7 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 text-xs gap-1.5 text-emerald-300 border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 transition-all"
+                    className="h-8 text-xs gap-1.5 text-primary border-primary/40 bg-primary/10 hover:bg-primary/20 transition-all"
                   >
                     <span>GitHub</span>
                     <ExternalLink className="h-3 w-3" />
@@ -144,7 +144,7 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
             </div>
 
             {/* Issue Title */}
-            <SheetTitle className="text-base sm:text-lg md:text-xl font-bold leading-snug text-zinc-50 tracking-tight">
+            <SheetTitle className="text-base sm:text-lg md:text-xl font-bold leading-snug text-foreground tracking-tight">
               {issue.title}
             </SheetTitle>
 
@@ -164,15 +164,15 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
               </span>
 
               {/* Estimated Solve Time */}
-              <span className="inline-flex items-center gap-1.5 text-zinc-300 bg-zinc-900/90 px-2.5 py-1 rounded-lg border border-zinc-800 text-xs">
-                <Clock className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="inline-flex items-center gap-1.5 text-foreground bg-card/90 px-2.5 py-1 rounded-lg border border-border text-xs">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                 <span>~{formatTimeMinutes(issue.estimatedMinutesToSolve)} estimated</span>
               </span>
 
               {/* Funded Bounty Badge */}
               {issue.bounty && issue.bounty.isFunded && (
-                <span className="inline-flex items-center gap-1.5 text-amber-300 font-bold bg-amber-500/15 px-3 py-1 rounded-lg border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)] text-xs">
-                  <Coins className="h-3.5 w-3.5 text-amber-400" />
+                <span className="inline-flex items-center gap-1.5 text-bounty-gold font-bold bg-bounty-gold/15 px-3 py-1 rounded-lg border border-bounty-gold/40 shadow-[0_0_12px_hsl(var(--bounty-gold)/0.2)] text-xs">
+                  <Coins className="h-3.5 w-3.5 text-bounty-gold" />
                   <span>${issue.bounty.amountUsd} Bounty ({issue.bounty.source})</span>
                 </span>
               )}
@@ -190,33 +190,33 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
           {/* Workbench Tabs Navigation */}
           <div className="space-y-5">
             <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)}>
-              <TabsList className="grid w-full grid-cols-4 bg-zinc-900/90 border border-zinc-800 p-1 rounded-xl text-xs h-11">
+              <TabsList className="grid w-full grid-cols-4 bg-card/90 border border-border p-1 rounded-xl text-xs h-11">
                 <TabsTrigger
                   value="root_cause"
-                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-zinc-800 data-[state=active]:text-emerald-300 data-[state=active]:shadow-md transition-all"
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-secondary data-[state=active]:text-primary data-[state=active]:shadow-md transition-all"
                 >
-                  <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
                   <span>Root Cause</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="files"
-                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-zinc-800 data-[state=active]:text-purple-300 data-[state=active]:shadow-md transition-all"
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-secondary data-[state=active]:text-accent data-[state=active]:shadow-md transition-all"
                 >
-                  <Layers className="h-3.5 w-3.5 text-purple-400" />
+                  <Layers className="h-3.5 w-3.5 text-accent" />
                   <span>AST Files</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="repro"
-                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-zinc-800 data-[state=active]:text-cyan-300 data-[state=active]:shadow-md transition-all"
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-secondary data-[state=active]:text-accent data-[state=active]:shadow-md transition-all"
                 >
-                  <Terminal className="h-3.5 w-3.5 text-cyan-400" />
+                  <Terminal className="h-3.5 w-3.5 text-accent" />
                   <span>Repro</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="fix"
-                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-zinc-800 data-[state=active]:text-amber-300 data-[state=active]:shadow-md transition-all"
+                  className="flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-lg data-[state=active]:bg-secondary data-[state=active]:text-bounty-gold data-[state=active]:shadow-md transition-all"
                 >
-                  <CheckSquare className="h-3.5 w-3.5 text-amber-400" />
+                  <CheckSquare className="h-3.5 w-3.5 text-bounty-gold" />
                   <span>Fix Plan</span>
                 </TabsTrigger>
               </TabsList>
@@ -261,22 +261,22 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
           </div>
 
           {/* Sticky Bottom Action Deck */}
-          <div className="sticky bottom-0 z-20 -mx-6 -mb-6 sm:-mx-8 sm:-mb-8 border-t border-zinc-800/90 bg-zinc-950/95 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl">
+          <div className="sticky bottom-0 z-20 -mx-6 -mb-6 sm:-mx-8 sm:-mb-8 border-t border-border/90 bg-background/95 p-4 sm:p-5 backdrop-blur-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl">
             {/* Quick Branch Command */}
-            <div className="flex items-center gap-2 text-xs text-zinc-400 truncate w-full sm:w-auto">
-              <span className="text-zinc-500 font-semibold shrink-0">Branch:</span>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground truncate w-full sm:w-auto">
+              <span className="text-muted-foreground font-semibold shrink-0">Branch:</span>
               <button
                 onClick={handleCopyBranch}
-                className="group flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 hover:border-emerald-500/50 transition-all truncate"
+                className="group flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-card border border-border hover:border-primary/50 transition-all truncate"
                 title="Click to copy git checkout command"
               >
-                <code className="text-emerald-400 font-bold truncate">
+                <code className="text-primary font-bold truncate">
                   {report?.branchingConvention || `fix/issue-${issue.githubIssueNumber}`}
                 </code>
                 {copiedBranch ? (
-                  <Check className="h-3 w-3 text-emerald-400 shrink-0" />
+                  <Check className="h-3 w-3 text-primary shrink-0" />
                 ) : (
-                  <Copy className="h-3 w-3 text-zinc-500 group-hover:text-emerald-400 shrink-0" />
+                  <Copy className="h-3 w-3 text-muted-foreground group-hover:text-primary shrink-0" />
                 )}
               </button>
             </div>
@@ -293,7 +293,7 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                   <Button
                     variant="glow"
                     size="sm"
-                    className="w-full sm:w-auto gap-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-400 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.3)]"
+                    className="w-full sm:w-auto gap-1.5 text-xs font-bold bg-bounty-gold hover:bg-bounty-gold text-muted-foreground shadow-[0_0_15px_hsl(var(--bounty-gold)/0.3)]"
                   >
                     <Coins className="h-3.5 w-3.5" />
                     <span>Claim ${issue.bounty.amountUsd} on {issue.bounty.source}</span>
@@ -309,7 +309,7 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                 <Button
                   variant="terminal"
                   size="sm"
-                  className="w-full sm:w-auto gap-2 text-xs font-bold text-zinc-950 bg-emerald-400 hover:bg-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                  className="w-full sm:w-auto gap-2 text-xs font-bold text-primary-foreground bg-primary hover:bg-primary/90 shadow-[0_0_15px_hsl(var(--primary)/0.3)]"
                 >
                   <span>Open on GitHub</span>
                   <ExternalLink className="h-3.5 w-3.5" />

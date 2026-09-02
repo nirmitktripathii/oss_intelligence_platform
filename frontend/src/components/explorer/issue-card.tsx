@@ -22,8 +22,8 @@ export function IssueCard({ issue, isSelected, onSelect }: IssueCardProps) {
       onClick={() => onSelect(issue)}
       className={`group relative flex flex-col justify-between rounded-xl border p-4 font-mono transition-all cursor-pointer backdrop-blur-sm ${
         isSelected
-          ? 'border-emerald-500 bg-card shadow-[0_0_20px_rgba(16,185,129,0.2)] ring-1 ring-emerald-500'
-          : 'border-border/80 bg-card/70 hover:border-emerald-500/60 hover:bg-card hover:shadow-md'
+          ? 'border-primary bg-card shadow-[0_0_20px_hsl(var(--primary)/0.2)] ring-1 ring-primary'
+          : 'border-border/80 bg-card/70 hover:border-primary/60 hover:bg-card hover:shadow-md'
       }`}
     >
       {/* Top Bar: Domain Pill + Bounty / ROI Badge */}
@@ -43,7 +43,7 @@ export function IssueCard({ issue, isSelected, onSelect }: IssueCardProps) {
           {/* Bounty or ROI Badge */}
           {issue.bounty && issue.bounty.isFunded ? (
             <div className="flex items-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.2)]">
+              <span className="inline-flex items-center gap-1 rounded-full border border-bounty-gold/40 bg-bounty-gold/10 px-2 py-0.5 text-[11px] font-bold text-bounty-gold shadow-[0_0_8px_hsl(var(--bounty-gold)/0.2)]">
                 <Coins className="h-3 w-3" />
                 <span>${issue.bounty.amountUsd}</span>
               </span>
@@ -66,16 +66,16 @@ export function IssueCard({ issue, isSelected, onSelect }: IssueCardProps) {
           <div className="flex items-center gap-1.5 truncate">
             <span className="text-muted-foreground/70">{issue.repository.owner}/</span>
             <span className="font-semibold text-foreground">{issue.repository.name}</span>
-            <span className="text-emerald-400 font-bold">#{issue.githubIssueNumber}</span>
+            <span className="text-primary font-bold">#{issue.githubIssueNumber}</span>
           </div>
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
-            <Star className="h-3 w-3 text-amber-400 fill-amber-400" />
+            <Star className="h-3 w-3 text-bounty-gold fill-bounty-gold" />
             <span>{(issue.repository.stars / 1000).toFixed(1)}k</span>
           </div>
         </div>
 
         {/* Issue Title */}
-        <h3 className="text-xs font-semibold leading-snug text-foreground group-hover:text-emerald-400 transition-colors line-clamp-2">
+        <h3 className="text-xs font-semibold leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2">
           {issue.title}
         </h3>
 
@@ -117,7 +117,7 @@ export function IssueCard({ issue, isSelected, onSelect }: IssueCardProps) {
           </span>
         </div>
 
-        <div className="flex items-center gap-1 text-emerald-400 group-hover:translate-x-0.5 transition-transform font-semibold text-xs">
+        <div className="flex items-center gap-1 text-primary group-hover:translate-x-0.5 transition-transform font-semibold text-xs">
           <span>Inspect</span>
           <ArrowUpRight className="h-3.5 w-3.5" />
         </div>

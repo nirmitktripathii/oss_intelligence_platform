@@ -14,61 +14,61 @@ export function IssueStatsBar({ totalIssuesCount = 54 }: IssueStatsBarProps) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono text-xs">
       {/* Stat 1: Total Open Issues */}
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/70 p-3 flex items-center justify-between">
+      <div className="rounded-lg border border-border/80 bg-background/70 p-3 flex items-center justify-between">
         <div className="space-y-0.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">
             Indexed Live Issues
           </span>
-          <span className="text-lg font-extrabold text-zinc-100">
+          <span className="text-lg font-extrabold text-foreground">
             {totalIssuesCount}
           </span>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-900 border border-zinc-800 text-emerald-400">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-card border border-border text-primary">
           <Cpu className="h-4 w-4" />
         </div>
       </div>
 
       {/* Stat 2: Total Bounty Pool */}
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/70 p-3 flex items-center justify-between">
+      <div className="rounded-lg border border-border/80 bg-background/70 p-3 flex items-center justify-between">
         <div className="space-y-0.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">
             Total Bounty Pool
           </span>
-          <span className="text-lg font-extrabold text-amber-300">
+          <span className="text-lg font-extrabold text-bounty-gold">
             ${stats.totalBountyPoolUsd.toLocaleString()}
           </span>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-bounty-gold/10 border border-bounty-gold/30 text-bounty-gold">
           <Coins className="h-4 w-4" />
         </div>
       </div>
 
       {/* Stat 3: Avg Hourly ROI */}
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/70 p-3 flex items-center justify-between">
+      <div className="rounded-lg border border-border/80 bg-background/70 p-3 flex items-center justify-between">
         <div className="space-y-0.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">
             Avg Effective Rate
           </span>
-          <span className="text-lg font-extrabold text-emerald-400">
+          <span className="text-lg font-extrabold text-primary">
             ${stats.avgHourlyRoi}/hr
           </span>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10 border border-primary/30 text-primary">
           <Flame className="h-4 w-4" />
         </div>
       </div>
 
       {/* Stat 4: Active Funded Bounties */}
-      <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/70 p-3 flex items-center justify-between">
+      <div className="rounded-lg border border-border/80 bg-background/70 p-3 flex items-center justify-between">
         <div className="space-y-0.5">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">
             Active Bounties
           </span>
-          <span className="text-lg font-extrabold text-purple-400">
+          <span className="text-lg font-extrabold text-accent">
             {stats.activeBountiesCount.toLocaleString()}
           </span>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-purple-500/10 border border-purple-500/30 text-purple-400">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent/10 border border-accent/30 text-accent">
           <Target className="h-4 w-4" />
         </div>
       </div>

@@ -64,7 +64,7 @@ export function HeroStats() {
 
   const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
   const liveBadge = !loaded ? 'syncing…' : isLive ? 'live' : 'demo';
-  const dataColor = !loaded || isLive ? undefined : 'text-amber-400';
+  const dataColor = !loaded || isLive ? undefined : 'text-bounty-gold';
 
   const stats: StatCard[] = [
     {
@@ -72,32 +72,32 @@ export function HeroStats() {
       value: issuesCount == null ? '—' : fmt(issuesCount),
       change: liveBadge,
       icon: Activity,
-      color: dataColor ?? 'text-emerald-400',
-      bg: 'bg-emerald-500/10 border-emerald-500/20',
+      color: dataColor ?? 'text-primary',
+      bg: 'bg-primary/10 border-primary/20',
     },
     {
       label: 'Funded Bounty Pool',
       value: bountyPool == null ? '—' : `$${fmt(bountyPool)}`,
       change: !loaded ? 'syncing…' : isLive ? 'Polar · Algora' : 'demo',
       icon: DollarSign,
-      color: dataColor ?? 'text-amber-400',
-      bg: 'bg-amber-500/10 border-amber-500/20',
+      color: dataColor ?? 'text-bounty-gold',
+      bg: 'bg-bounty-gold/10 border-bounty-gold/20',
     },
     {
       label: 'AST Localization',
       value: 'AI-Assisted',
       change: 'Graphify',
       icon: Target,
-      color: 'text-cyan-400',
-      bg: 'bg-cyan-500/10 border-cyan-500/20',
+      color: 'text-accent',
+      bg: 'bg-accent/10 border-accent/20',
     },
     {
       label: 'Push Alerts',
       value: 'Multi-Channel',
       change: 'Telegram · Discord',
       icon: Zap,
-      color: 'text-purple-400',
-      bg: 'bg-purple-500/10 border-purple-500/20',
+      color: 'text-accent',
+      bg: 'bg-accent/10 border-accent/20',
     },
   ];
 

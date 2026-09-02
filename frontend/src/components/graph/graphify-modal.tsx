@@ -21,17 +21,17 @@ interface GraphifyModalProps {
 export function GraphifyModal({ isOpen, onClose, targetFile }: GraphifyModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 border-zinc-800 bg-zinc-950 font-mono flex flex-col overflow-hidden">
-        <DialogHeader className="p-4 pb-2 border-b border-zinc-800 shrink-0">
+      <DialogContent className="max-w-6xl w-[95vw] h-[85vh] p-0 border-border bg-background font-mono flex flex-col overflow-hidden">
+        <DialogHeader className="p-4 pb-2 border-b border-border shrink-0">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-purple-500/20 text-purple-400 border border-purple-500/40">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-accent/20 text-accent border border-accent/40">
               <Network className="h-4 w-4" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-semibold text-zinc-100">
+              <DialogTitle className="text-sm font-semibold text-foreground">
                 Graphify Knowledge Graph & AST Blast Radius Visualizer
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-400">
+              <DialogDescription className="text-xs text-muted-foreground">
                 Interactive dependency paths, community clusters, and target function callers/callees.
               </DialogDescription>
             </div>

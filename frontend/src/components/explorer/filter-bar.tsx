@@ -72,7 +72,7 @@ export function FilterBar({
           onClick={() => onSetDomain('all')}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-md border text-xs whitespace-nowrap transition-all ${
             filters.domain === 'all'
-              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-400 font-semibold shadow-sm'
+              ? 'border-primary bg-primary/15 text-primary font-semibold shadow-sm'
               : 'border-border bg-card/60 text-muted-foreground hover:border-border/80 hover:text-foreground'
           }`}
         >
@@ -114,7 +114,7 @@ export function FilterBar({
           >
             <SelectTrigger className="h-8 w-40 border-border bg-background text-xs">
               <div className="flex items-center gap-1.5 truncate">
-                <Sparkles className="h-3 w-3 text-emerald-400" />
+                <Sparkles className="h-3 w-3 text-primary" />
                 <SelectValue placeholder="Difficulty" />
               </div>
             </SelectTrigger>
@@ -135,7 +135,7 @@ export function FilterBar({
           >
             <SelectTrigger className="h-8 w-40 border-border bg-background text-xs">
               <div className="flex items-center gap-1.5 truncate">
-                <Clock className="h-3 w-3 text-amber-400" />
+                <Clock className="h-3 w-3 text-bounty-gold" />
                 <SelectValue placeholder="Time to Solve" />
               </div>
             </SelectTrigger>
@@ -156,7 +156,7 @@ export function FilterBar({
                 size="sm"
                 className="h-8 border-border bg-background text-xs gap-1.5"
               >
-                <Layers className="h-3 w-3 text-blue-400" />
+                <Layers className="h-3 w-3 text-accent" />
                 <span>
                   Stack {filters.techStack.length > 0 ? `(${filters.techStack.length})` : ''}
                 </span>
@@ -183,7 +183,7 @@ export function FilterBar({
 
           {/* Funded Bounty Toggle */}
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border border-border bg-background">
-            <Coins className="h-3.5 w-3.5 text-amber-400" />
+            <Coins className="h-3.5 w-3.5 text-bounty-gold" />
             <span className="text-[11px] text-foreground/90">Bounties Only</span>
             <Switch
               checked={filters.hasBountyOnly}
@@ -200,7 +200,7 @@ export function FilterBar({
               variant="ghost"
               size="sm"
               onClick={onResetFilters}
-              className="h-8 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 gap-1"
+              className="h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/30 gap-1"
             >
               <RotateCcw className="h-3 w-3" />
               <span>Reset</span>
@@ -234,7 +234,7 @@ export function FilterBar({
               size="icon"
               className={`h-7 w-7 rounded ${
                 filters.viewMode === 'grid'
-                  ? 'bg-card text-emerald-400 shadow-sm'
+                  ? 'bg-card text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => onSetViewMode('grid')}
@@ -247,7 +247,7 @@ export function FilterBar({
               size="icon"
               className={`h-7 w-7 rounded ${
                 filters.viewMode === 'table'
-                  ? 'bg-card text-emerald-400 shadow-sm'
+                  ? 'bg-card text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => onSetViewMode('table')}
@@ -260,7 +260,7 @@ export function FilterBar({
               size="icon"
               className={`h-7 w-7 rounded ${
                 filters.viewMode === 'compact'
-                  ? 'bg-card text-emerald-400 shadow-sm'
+                  ? 'bg-card text-primary shadow-sm'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => onSetViewMode('compact')}
@@ -274,9 +274,9 @@ export function FilterBar({
 
       {/* Optional Bounty Min Slider Drawer */}
       {showBountySlider && (
-        <div className="flex items-center gap-4 px-3 py-2 rounded-md border border-amber-500/20 bg-amber-500/5 text-xs animate-in slide-in-from-top-2">
+        <div className="flex items-center gap-4 px-3 py-2 rounded-md border border-bounty-gold/20 bg-bounty-gold/5 text-xs animate-in slide-in-from-top-2">
           <span className="text-muted-foreground shrink-0">
-            Min Bounty: <span className="text-amber-400 font-bold">${filters.minBounty}</span>
+            Min Bounty: <span className="text-bounty-gold font-bold">${filters.minBounty}</span>
           </span>
           <div className="flex-1 max-w-xs">
             <Slider
@@ -295,7 +295,7 @@ export function FilterBar({
                 onClick={() => onSetMinBounty(amt)}
                 className={`px-1.5 py-0.5 rounded border text-[10px] ${
                   filters.minBounty === amt
-                    ? 'border-amber-500 bg-amber-500/20 text-amber-300 font-bold'
+                    ? 'border-bounty-gold bg-bounty-gold/20 text-bounty-gold font-bold'
                     : 'border-border bg-background text-muted-foreground'
                 }`}
               >

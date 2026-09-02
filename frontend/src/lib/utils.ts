@@ -46,64 +46,64 @@ export function getDomainInfo(domain: Domain | string): { label: string; colorCl
     case 'ai_ml':
       return {
         label: 'AI / ML',
-        colorClass: 'text-purple-400 border-purple-500/30 bg-purple-500/10',
-        borderClass: 'border-purple-500/40',
-        bgClass: 'bg-purple-500/10',
-        textClass: 'text-purple-400',
+        colorClass: 'text-domain-ai border-domain-ai/30 bg-domain-ai/10',
+        borderClass: 'border-domain-ai/40',
+        bgClass: 'bg-domain-ai/10',
+        textClass: 'text-domain-ai',
         hex: '#a855f7',
       };
     case 'data':
       return {
         label: 'Data & Infra',
-        colorClass: 'text-cyan-400 border-cyan-500/30 bg-cyan-500/10',
-        borderClass: 'border-cyan-500/40',
-        bgClass: 'bg-cyan-500/10',
-        textClass: 'text-cyan-400',
+        colorClass: 'text-domain-data border-domain-data/30 bg-domain-data/10',
+        borderClass: 'border-domain-data/40',
+        bgClass: 'bg-domain-data/10',
+        textClass: 'text-domain-data',
         hex: '#06b6d4',
       };
     case 'web':
       return {
         label: 'Web Ecosystem',
-        colorClass: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10',
-        borderClass: 'border-emerald-500/40',
-        bgClass: 'bg-emerald-500/10',
-        textClass: 'text-emerald-400',
+        colorClass: 'text-domain-web border-domain-web/30 bg-domain-web/10',
+        borderClass: 'border-domain-web/40',
+        bgClass: 'bg-domain-web/10',
+        textClass: 'text-domain-web',
         hex: '#10b981',
       };
     case 'cloud_devops':
       return {
         label: 'Cloud & DevOps',
-        colorClass: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
-        borderClass: 'border-blue-500/40',
-        bgClass: 'bg-blue-500/10',
-        textClass: 'text-blue-400',
+        colorClass: 'text-domain-cloud border-domain-cloud/30 bg-domain-cloud/10',
+        borderClass: 'border-domain-cloud/40',
+        bgClass: 'bg-domain-cloud/10',
+        textClass: 'text-domain-cloud',
         hex: '#3b82f6',
       };
     case 'security':
       return {
         label: 'Security',
-        colorClass: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
-        borderClass: 'border-rose-500/40',
-        bgClass: 'bg-rose-500/10',
-        textClass: 'text-rose-400',
+        colorClass: 'text-domain-sec border-domain-sec/30 bg-domain-sec/10',
+        borderClass: 'border-domain-sec/40',
+        bgClass: 'bg-domain-sec/10',
+        textClass: 'text-domain-sec',
         hex: '#f43f5e',
       };
     case 'systems':
       return {
         label: 'Systems & OS',
-        colorClass: 'text-amber-400 border-amber-500/30 bg-amber-500/10',
-        borderClass: 'border-amber-500/40',
-        bgClass: 'bg-amber-500/10',
-        textClass: 'text-amber-400',
+        colorClass: 'text-domain-sys border-domain-sys/30 bg-domain-sys/10',
+        borderClass: 'border-domain-sys/40',
+        bgClass: 'bg-domain-sys/10',
+        textClass: 'text-domain-sys',
         hex: '#f59e0b',
       };
     default:
       return {
         label: String(domain).toUpperCase(),
-        colorClass: 'text-slate-400 border-slate-500/30 bg-slate-500/10',
-        borderClass: 'border-slate-500/40',
-        bgClass: 'bg-slate-500/10',
-        textClass: 'text-slate-400',
+        colorClass: 'text-muted-foreground border-border bg-muted/40',
+        borderClass: 'border-border',
+        bgClass: 'bg-muted/40',
+        textClass: 'text-muted-foreground',
         hex: '#64748b',
       };
   }
@@ -115,27 +115,27 @@ export function getDifficultyInfo(difficulty: Difficulty | string): { label: str
     case 'easy':
       return {
         label: 'Good First Issue',
-        badgeClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+        badgeClass: 'bg-primary/15 text-primary border-primary/30',
         color: '#10b981',
       };
     case 'intermediate':
     case 'medium':
       return {
         label: 'Intermediate',
-        badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+        badgeClass: 'bg-bounty-gold/15 text-bounty-gold border-bounty-gold/30',
         color: '#f59e0b',
       };
     case 'advanced':
     case 'hard':
       return {
         label: 'Advanced',
-        badgeClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
+        badgeClass: 'bg-destructive/15 text-destructive border-destructive/30',
         color: '#f43f5e',
       };
     default:
       return {
         label: 'General',
-        badgeClass: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+        badgeClass: 'bg-muted/40 text-muted-foreground border-border',
         color: '#64748b',
       };
   }
@@ -151,7 +151,7 @@ export function getRoiTier(hourlyRoiUsd: number | undefined): {
     return {
       tier: 'none',
       label: 'Community Issue',
-      badgeClass: 'bg-zinc-800/80 text-zinc-400 border-zinc-700/50',
+      badgeClass: 'bg-secondary/80 text-muted-foreground border-border',
       emoji: '🌱',
     };
   }
@@ -159,7 +159,7 @@ export function getRoiTier(hourlyRoiUsd: number | undefined): {
     return {
       tier: 'exceptional',
       label: `$${Math.round(hourlyRoiUsd)}/hr ROI`,
-      badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.25)] animate-pulse-glow',
+      badgeClass: 'bg-bounty-gold/20 text-bounty-gold border-bounty-gold/40 shadow-[0_0_12px_hsl(var(--bounty-gold)/0.25)] animate-pulse-glow',
       emoji: '🔥',
     };
   }
@@ -167,14 +167,14 @@ export function getRoiTier(hourlyRoiUsd: number | undefined): {
     return {
       tier: 'great',
       label: `$${Math.round(hourlyRoiUsd)}/hr ROI`,
-      badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)]',
+      badgeClass: 'bg-primary/20 text-primary border-primary/40 shadow-[0_0_8px_hsl(var(--primary)/0.2)]',
       emoji: '⚡',
     };
   }
   return {
     tier: 'standard',
     label: `$${Math.round(hourlyRoiUsd)}/hr ROI`,
-    badgeClass: 'bg-blue-500/15 text-blue-300 border-blue-500/30',
+    badgeClass: 'bg-accent/15 text-accent border-accent/30',
     emoji: '⚖️',
   };
 }

@@ -49,19 +49,19 @@ export function CommandMenu({
   const getDomainIcon = (iconName: string) => {
     switch (iconName) {
       case 'Sparkles':
-        return <Sparkles className="h-4 w-4 text-purple-400" />;
+        return <Sparkles className="h-4 w-4 text-accent" />;
       case 'Database':
-        return <Database className="h-4 w-4 text-cyan-400" />;
+        return <Database className="h-4 w-4 text-accent" />;
       case 'Globe':
-        return <Globe className="h-4 w-4 text-emerald-400" />;
+        return <Globe className="h-4 w-4 text-primary" />;
       case 'Cloud':
-        return <Cloud className="h-4 w-4 text-blue-400" />;
+        return <Cloud className="h-4 w-4 text-accent" />;
       case 'ShieldAlert':
-        return <ShieldAlert className="h-4 w-4 text-rose-400" />;
+        return <ShieldAlert className="h-4 w-4 text-destructive" />;
       case 'Cpu':
-        return <Cpu className="h-4 w-4 text-amber-400" />;
+        return <Cpu className="h-4 w-4 text-bounty-gold" />;
       default:
-        return <Terminal className="h-4 w-4 text-zinc-400" />;
+        return <Terminal className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
@@ -73,9 +73,9 @@ export function CommandMenu({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl border-zinc-800 bg-zinc-950 p-0 font-mono text-zinc-100 overflow-hidden shadow-2xl">
-        <div className="flex items-center border-b border-zinc-800 px-3">
-          <Search className="h-4 w-4 text-zinc-500 mr-2 shrink-0" />
+      <DialogContent className="max-w-xl border-border bg-background p-0 font-mono text-foreground overflow-hidden shadow-2xl">
+        <div className="flex items-center border-b border-border px-3">
+          <Search className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
           <Input
             placeholder="Type a command or search domains..."
             value={query}
@@ -83,7 +83,7 @@ export function CommandMenu({
             className="h-12 border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
             autoFocus
           />
-          <kbd className="pointer-events-none rounded border border-zinc-700 bg-zinc-900 px-1.5 py-0.5 text-[10px] text-zinc-400">
+          <kbd className="pointer-events-none rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground">
             ESC
           </kbd>
         </div>
@@ -91,7 +91,7 @@ export function CommandMenu({
         <div className="max-h-80 overflow-y-auto p-2 space-y-4 text-xs">
           {/* Section 1: Navigation & Actions */}
           <div className="space-y-1">
-            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-2">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">
               Quick Navigation
             </span>
             <button
@@ -99,13 +99,13 @@ export function CommandMenu({
                 router.push('/');
                 onClose();
               }}
-              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-card text-foreground hover:text-foreground transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Terminal className="h-4 w-4 text-emerald-400" />
+                <Terminal className="h-4 w-4 text-primary" />
                 <span>Go to Main Issue Terminal</span>
               </div>
-              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </button>
 
             <button
@@ -113,13 +113,13 @@ export function CommandMenu({
                 router.push('/graph');
                 onClose();
               }}
-              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-card text-foreground hover:text-foreground transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Network className="h-4 w-4 text-purple-400" />
+                <Network className="h-4 w-4 text-accent" />
                 <span>Open Graphify AST Knowledge Graph</span>
               </div>
-              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </button>
 
             <button
@@ -127,13 +127,13 @@ export function CommandMenu({
                 onClose();
                 onOpenPricing?.();
               }}
-              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-card text-foreground hover:text-foreground transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-400" />
+                <Zap className="h-4 w-4 text-bounty-gold" />
                 <span>Upgrade to Pro Terminal</span>
               </div>
-              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </button>
 
             <button
@@ -141,20 +141,20 @@ export function CommandMenu({
                 onClose();
                 onOpenNotifications?.();
               }}
-              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+              className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-card text-foreground hover:text-foreground transition-colors"
             >
               <div className="flex items-center gap-2">
-                <Bell className="h-4 w-4 text-blue-400" />
+                <Bell className="h-4 w-4 text-accent" />
                 <span>Configure Push Alert Channels</span>
               </div>
-              <ArrowRight className="h-3 w-3 text-zinc-600" />
+              <ArrowRight className="h-3 w-3 text-muted-foreground" />
             </button>
           </div>
 
           {/* Section 2: Jump to Domain */}
           {filteredDomains.length > 0 && (
             <div className="space-y-1">
-              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-2">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">
                 Filter by Ecosystem
               </span>
               {filteredDomains.map((dom) => (
@@ -164,16 +164,16 @@ export function CommandMenu({
                     onSelectDomain?.(dom.id);
                     onClose();
                   }}
-                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-zinc-900 text-zinc-300 hover:text-white transition-colors"
+                  className="w-full flex items-center justify-between px-2.5 py-2 rounded-md hover:bg-card text-foreground hover:text-foreground transition-colors"
                 >
                   <div className="flex items-center gap-2.5">
                     {getDomainIcon(dom.icon)}
                     <div className="text-left">
-                      <p className="font-medium text-zinc-200">{dom.label}</p>
-                      <p className="text-[10px] text-zinc-500">{dom.description}</p>
+                      <p className="font-medium text-foreground">{dom.label}</p>
+                      <p className="text-[10px] text-muted-foreground">{dom.description}</p>
                     </div>
                   </div>
-                  <kbd className="text-[10px] text-zinc-600 border border-zinc-800 rounded px-1.5 py-0.5">
+                  <kbd className="text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">
                     Filter
                   </kbd>
                 </button>
@@ -182,8 +182,8 @@ export function CommandMenu({
           )}
 
           {/* Section 3: Theme Switcher */}
-          <div className="space-y-1 border-t border-zinc-800/80 pt-2">
-            <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider px-2">
+          <div className="space-y-1 border-t border-border/80 pt-2">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-2">
               Theme Mode
             </span>
             <div className="grid grid-cols-3 gap-1 px-1">
@@ -192,9 +192,9 @@ export function CommandMenu({
                   setTheme('dark');
                   onClose();
                 }}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-zinc-800 hover:bg-zinc-900 text-zinc-300"
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-border hover:bg-card text-foreground"
               >
-                <Moon className="h-3 w-3 text-emerald-400" />
+                <Moon className="h-3 w-3 text-primary" />
                 <span>Dark</span>
               </button>
               <button
@@ -202,9 +202,9 @@ export function CommandMenu({
                   setTheme('light');
                   onClose();
                 }}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-zinc-800 hover:bg-zinc-900 text-zinc-300"
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-border hover:bg-card text-foreground"
               >
-                <Sun className="h-3 w-3 text-amber-400" />
+                <Sun className="h-3 w-3 text-bounty-gold" />
                 <span>Light</span>
               </button>
               <button
@@ -212,9 +212,9 @@ export function CommandMenu({
                   setTheme('system');
                   onClose();
                 }}
-                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-zinc-800 hover:bg-zinc-900 text-zinc-300"
+                className="flex items-center justify-center gap-1.5 py-1.5 rounded border border-border hover:bg-card text-foreground"
               >
-                <Laptop className="h-3 w-3 text-blue-400" />
+                <Laptop className="h-3 w-3 text-accent" />
                 <span>System</span>
               </button>
             </div>

@@ -61,17 +61,17 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-md border-zinc-800 bg-zinc-950 font-mono text-zinc-100">
+      <DialogContent className="max-w-md border-border bg-background font-mono text-foreground">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-primary/20 text-primary border border-primary/40">
               <Share2 className="h-4 w-4" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-semibold text-zinc-100">
+              <DialogTitle className="text-sm font-semibold text-foreground">
                 Share Issue Intelligence & Triage
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-400">
+              <DialogDescription className="text-xs text-muted-foreground">
                 Export workbench link or embed verified Proof-of-Work badges in your pull request.
               </DialogDescription>
             </div>
@@ -81,11 +81,11 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
         <div className="space-y-4 pt-2">
           {/* Direct Link */}
           <div className="space-y-1.5">
-            <label className="text-[11px] text-zinc-400">Direct Workbench URL</label>
+            <label className="text-[11px] text-muted-foreground">Direct Workbench URL</label>
             <div className="flex gap-2">
-              <Input readOnly value={shareUrl} className="text-xs text-zinc-300 font-mono bg-zinc-900/80 select-all" />
+              <Input readOnly value={shareUrl} className="text-xs text-foreground font-mono bg-card/80 select-all" />
               <Button variant="outline" size="sm" onClick={handleCopyLink} className="gap-1 text-xs shrink-0">
-                {copiedLink ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedLink ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5" />}
                 {copiedLink ? 'Copied' : 'Copy'}
               </Button>
             </div>
@@ -93,7 +93,7 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
 
           {/* Social Share Buttons */}
           <div className="space-y-1.5">
-            <label className="text-[11px] text-zinc-400">Social Broadcast</label>
+            <label className="text-[11px] text-muted-foreground">Social Broadcast</label>
             <div className="flex gap-2">
               <a
                 href={`https://twitter.com/intent/tweet?text=${tweetText}`}
@@ -101,7 +101,7 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
                 rel="noopener noreferrer"
                 className="flex-1"
               >
-                <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs text-blue-400 border-blue-500/30 hover:bg-blue-500/10">
+                <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs text-accent border-accent/30 hover:bg-accent/10">
                   <Twitter className="h-3.5 w-3.5" />
                   Post to X / Twitter
                 </Button>
@@ -112,7 +112,7 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
                 rel="noopener noreferrer"
                 className="flex-1"
               >
-                <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs text-sky-400 border-sky-500/30 hover:bg-sky-500/10">
+                <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs text-accent border-accent/30 hover:bg-accent/10">
                   <ExternalLink className="h-3.5 w-3.5" />
                   Share on LinkedIn
                 </Button>
@@ -121,16 +121,16 @@ export function ShareModal({ isOpen, onClose, issue }: ShareModalProps) {
           </div>
 
           {/* GitHub Proof-of-Work Badge */}
-          <div className="rounded border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
+          <div className="rounded border border-border bg-card/40 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-primary">
               <ShieldCheck className="h-4 w-4" />
               <span>Verified Proof-of-Work Badge</span>
             </div>
-            <p className="text-[11px] text-zinc-400">
+            <p className="text-[11px] text-muted-foreground">
               Include this badge in your PR description to prove the fix conforms to repository CONTRIBUTING guidelines.
             </p>
-            <div className="flex items-center justify-between gap-2 bg-zinc-950 p-2 rounded border border-zinc-800">
-              <code className="text-[10px] text-zinc-400 truncate flex-1">{badgeMarkdown}</code>
+            <div className="flex items-center justify-between gap-2 bg-background p-2 rounded border border-border">
+              <code className="text-[10px] text-muted-foreground truncate flex-1">{badgeMarkdown}</code>
               <Button variant="terminal" size="xs" onClick={handleCopyBadge} className="gap-1 shrink-0">
                 {copiedBadge ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 {copiedBadge ? 'Copied' : 'Copy Badge'}

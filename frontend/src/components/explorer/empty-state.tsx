@@ -11,14 +11,14 @@ interface EmptyStateProps {
 
 export function EmptyState({ onReset, searchQuery }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-800 bg-zinc-950/40 p-12 text-center font-mono">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-900 border border-zinc-800 text-zinc-400 mb-4">
-        <Terminal className="h-6 w-6 text-emerald-400" />
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-background/40 p-12 text-center font-mono">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-card border border-border text-muted-foreground mb-4">
+        <Terminal className="h-6 w-6 text-primary" />
       </div>
-      <h3 className="text-sm font-semibold text-zinc-200">
+      <h3 className="text-sm font-semibold text-foreground">
         No matching open-source issues found
       </h3>
-      <p className="text-xs text-zinc-400 max-w-sm mt-1 mb-5">
+      <p className="text-xs text-muted-foreground max-w-sm mt-1 mb-5">
         {searchQuery
           ? `No live issues found matching "${searchQuery}". Try broadening your search or resetting filters.`
           : 'No issues currently match your active filters. Try adjusting domain, difficulty, or bounty requirements.'}

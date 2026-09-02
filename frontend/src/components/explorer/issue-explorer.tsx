@@ -85,7 +85,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
     <div className="space-y-6 font-mono">
       {/* Offline demo-data notice — shown only when the live backend is unreachable */}
       {isDemo && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="rounded-lg border border-bounty-gold/40 bg-bounty-gold/10 px-3 py-2 text-xs text-bounty-gold">
           ⚠️ Showing offline demo data — the live backend is unreachable (it may be waking from sleep). These are sample issues, not the live stream. Refresh in a moment.
         </div>
       )}
@@ -125,7 +125,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div
                 key={i}
-                className="rounded-xl border border-zinc-800 bg-zinc-950 p-4 space-y-3"
+                className="rounded-xl border border-border bg-background p-4 space-y-3"
               >
                 <div className="flex justify-between">
                   <Skeleton className="h-4 w-20" />
@@ -133,7 +133,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
                 </div>
                 <Skeleton className="h-5 w-3/4" />
                 <Skeleton className="h-10 w-full" />
-                <div className="flex gap-2 pt-2 border-t border-zinc-800">
+                <div className="flex gap-2 pt-2 border-t border-border">
                   <Skeleton className="h-4 w-16" />
                   <Skeleton className="h-4 w-16" />
                 </div>
@@ -188,7 +188,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
 
           {/* Pagination Footer */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-zinc-800/80 pt-4 text-xs text-zinc-400">
+            <div className="flex items-center justify-between border-t border-border/80 pt-4 text-xs text-muted-foreground">
               <div>
                 Showing {(page - 1) * filters.pageSize + 1}–
                 {Math.min(page * filters.pageSize, total)} of {total} live issues
@@ -206,7 +206,7 @@ export function IssueExplorer({ onOpenCommandMenu }: IssueExplorerProps) {
                   <span>Previous</span>
                 </Button>
 
-                <span className="px-2 font-semibold text-zinc-200">
+                <span className="px-2 font-semibold text-foreground">
                   Page {page} of {totalPages}
                 </span>
 

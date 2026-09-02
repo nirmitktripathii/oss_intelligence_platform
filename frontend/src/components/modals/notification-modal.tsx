@@ -140,17 +140,17 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl border-zinc-800 bg-zinc-950/95 font-mono">
+      <DialogContent className="max-w-xl border-border bg-background/95 font-mono">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/20 text-primary border border-primary/40">
               <Bell className="h-4 w-4" />
             </div>
             <div>
-              <DialogTitle className="text-sm font-semibold text-zinc-100">
+              <DialogTitle className="text-sm font-semibold text-foreground">
                 Multi-Channel Real-Time Alert Dispatcher
               </DialogTitle>
-              <DialogDescription className="text-xs text-zinc-400">
+              <DialogDescription className="text-xs text-muted-foreground">
                 Receive sub-60s push notifications for newly indexed live issues and funded bounties.
               </DialogDescription>
             </div>
@@ -160,7 +160,7 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
         <div className="space-y-4 pt-2">
           {/* Channel selector tabs */}
           <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)}>
-            <TabsList className="grid w-full grid-cols-3 bg-zinc-900 border-zinc-800">
+            <TabsList className="grid w-full grid-cols-3 bg-card border-border">
               <TabsTrigger value="telegram" className="flex items-center gap-1.5 text-xs">
                 <Bot className="h-3.5 w-3.5" />
                 Telegram Bot
@@ -177,14 +177,14 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
 
             {/* Telegram Channel */}
             <TabsContent value="telegram" className="space-y-3 pt-2">
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3 space-y-2.5">
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Pair with <span className="text-emerald-400 font-semibold">@GitScoutAlertsBot</span> on Telegram for instant alerts with inline PR action buttons.
+              <div className="rounded-md border border-border bg-card/40 p-3 space-y-2.5">
+                <p className="text-xs text-foreground leading-relaxed">
+                  Pair with <span className="text-primary font-semibold">@GitScoutAlertsBot</span> on Telegram for instant alerts with inline PR action buttons.
                 </p>
-                <div className="flex items-center justify-between gap-3 bg-zinc-950 p-2.5 rounded border border-zinc-800">
+                <div className="flex items-center justify-between gap-3 bg-background p-2.5 rounded border border-border">
                   <div>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block">Pairing Token</span>
-                    <span className="text-sm font-bold text-emerald-400">{telegramCode}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider block">Pairing Token</span>
+                    <span className="text-sm font-bold text-primary">{telegramCode}</span>
                   </div>
                   <a
                     href={`https://t.me/GitScoutAlertsBot?start=pair_${telegramCode}`}
@@ -197,7 +197,7 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                     </Button>
                   </a>
                 </div>
-                <div className="flex items-center justify-between text-xs text-zinc-400 pt-1">
+                <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
                   <span>Status:</span>
                   <Badge variant={telegramConnected ? 'emerald' : 'secondary'} className="text-[11px]">
                     {telegramConnected ? '🟢 Connected' : '⚪ Waiting for /start command'}
@@ -208,12 +208,12 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
 
             {/* Discord Channel */}
             <TabsContent value="discord" className="space-y-3 pt-2">
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3 space-y-3">
-                <p className="text-xs text-zinc-300">
+              <div className="rounded-md border border-border bg-card/40 p-3 space-y-3">
+                <p className="text-xs text-foreground">
                   Paste your Discord incoming Webhook URL to stream formatted rich embeds with domain color tags directly into your server channel.
                 </p>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] text-zinc-400">Discord Webhook URL</label>
+                  <label className="text-[11px] text-muted-foreground">Discord Webhook URL</label>
                   <div className="flex gap-2">
                     <Input
                       placeholder="https://discord.com/api/webhooks/123456789/abcdef..."
@@ -236,7 +236,7 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                   </div>
                 </div>
                 {discordVerified && (
-                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs">
+                  <div className="flex items-center gap-1.5 text-primary text-xs">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     <span>Webhook verified & ready for live notifications</span>
                   </div>
@@ -246,12 +246,12 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
 
             {/* Email Channel */}
             <TabsContent value="email" className="space-y-3 pt-2">
-              <div className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3 space-y-3">
-                <p className="text-xs text-zinc-300">
+              <div className="rounded-md border border-border bg-card/40 p-3 space-y-3">
+                <p className="text-xs text-foreground">
                   Transactional digests powered by Resend API with 1-click unsubscribe and curated issue links.
                 </p>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] text-zinc-400">Developer Email</label>
+                  <label className="text-[11px] text-muted-foreground">Developer Email</label>
                   <Input
                     type="email"
                     placeholder="hacker@company.com"
@@ -261,7 +261,7 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] text-zinc-400">Digest Cadence</label>
+                  <label className="text-[11px] text-muted-foreground">Digest Cadence</label>
                   <div className="grid grid-cols-3 gap-2">
                     {(['instant', 'daily', 'weekly'] as const).map((freq) => (
                       <button
@@ -270,8 +270,8 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                         onClick={() => setEmailFrequency(freq)}
                         className={`text-xs py-1.5 px-2 rounded border font-mono capitalize transition-colors ${
                           emailFrequency === freq
-                            ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300'
-                            : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700'
+                            ? 'border-primary bg-primary/15 text-primary'
+                            : 'border-border bg-card text-muted-foreground hover:border-border'
                         }`}
                       >
                         {freq} {freq === 'instant' ? '⚡' : ''}
@@ -284,12 +284,12 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
           </Tabs>
 
           {/* Filtering Criteria */}
-          <div className="rounded-md border border-zinc-800/80 bg-zinc-900/30 p-3 space-y-3">
-            <h4 className="text-xs font-semibold text-zinc-200">Alert Triggers & Filter Rules</h4>
+          <div className="rounded-md border border-border/80 bg-card/30 p-3 space-y-3">
+            <h4 className="text-xs font-semibold text-foreground">Alert Triggers & Filter Rules</h4>
 
             {/* Domain toggles */}
             <div className="space-y-1.5">
-              <span className="text-[11px] text-zinc-400">Active Domains</span>
+              <span className="text-[11px] text-muted-foreground">Active Domains</span>
               <div className="flex flex-wrap gap-1.5">
                 {DOMAINS.map((dom) => {
                   const isSelected = selectedDomains.includes(dom.id);
@@ -300,8 +300,8 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                       onClick={() => toggleDomain(dom.id)}
                       className={`text-[11px] px-2 py-0.5 rounded border transition-all ${
                         isSelected
-                          ? 'border-emerald-500/60 bg-emerald-500/15 text-emerald-300 font-medium'
-                          : 'border-zinc-800 bg-zinc-900/60 text-zinc-500 hover:border-zinc-700'
+                          ? 'border-primary/60 bg-primary/15 text-primary font-medium'
+                          : 'border-border bg-card/60 text-muted-foreground hover:border-border'
                       }`}
                     >
                       {dom.label}
@@ -313,9 +313,9 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
 
             {/* Min bounty threshold */}
             <div className="space-y-1.5">
-              <div className="flex justify-between text-[11px] text-zinc-400">
+              <div className="flex justify-between text-[11px] text-muted-foreground">
                 <span>Minimum Bounty Threshold</span>
-                <span className="text-amber-400 font-semibold">${minBounty} USD</span>
+                <span className="text-bounty-gold font-semibold">${minBounty} USD</span>
               </div>
               <div className="flex gap-1.5">
                 {[0, 50, 100, 250, 500].map((amt) => (
@@ -325,8 +325,8 @@ export function NotificationModal({ isOpen, onClose }: NotificationModalProps) {
                     onClick={() => setMinBounty(amt)}
                     className={`text-xs flex-1 py-1 rounded border transition-colors ${
                       minBounty === amt
-                        ? 'border-amber-500/60 bg-amber-500/15 text-amber-300 font-semibold'
-                        : 'border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:border-zinc-700'
+                        ? 'border-bounty-gold/60 bg-bounty-gold/15 text-bounty-gold font-semibold'
+                        : 'border-border bg-card/60 text-muted-foreground hover:border-border'
                     }`}
                   >
                     {amt === 0 ? 'All' : `$${amt}`}

@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 
 export default function NotFound() {
   return (
-    <div className="container flex min-h-[70vh] flex-col items-center justify-center text-center font-mono text-zinc-100">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-800 text-rose-400 mb-6 shadow-xl">
+    <div className="container flex min-h-[70vh] flex-col items-center justify-center text-center font-mono text-foreground">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-card border border-border text-destructive mb-6 shadow-xl">
         <AlertTriangle className="h-8 w-8" />
       </div>
 
-      <div className="inline-flex items-center gap-1.5 rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs text-rose-400 font-bold mb-3">
+      <div className="inline-flex items-center gap-1.5 rounded-full border border-destructive/40 bg-destructive/10 px-3 py-1 text-xs text-destructive font-bold mb-3">
         <span>ERROR 404: RESOURCE_NOT_FOUND</span>
       </div>
 
@@ -17,7 +17,7 @@ export default function NotFound() {
         Target AST Symbol or Issue Not Found
       </h1>
 
-      <p className="text-xs sm:text-sm text-zinc-400 max-w-md mt-2 mb-8 leading-relaxed">
+      <p className="text-xs sm:text-sm text-muted-foreground max-w-md mt-2 mb-8 leading-relaxed">
         The requested repository issue or triage report does not exist in the index or has been migrated.
       </p>
 
