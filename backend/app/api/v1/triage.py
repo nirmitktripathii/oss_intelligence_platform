@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.issue import Issue
 from app.models.triage import TriageReport
@@ -34,12 +35,20 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
     Retrieve AI triage report, localized files, reproduction script, and fix plan for an issue.
     If triage has not been generated yet, automatically generates and persists it.
     """
-    stmt = select(TriageReport).where(TriageReport.issue_id == issue_id)
+    # Eager-load the parent issue so we can surface its optional body_summary without a
+    # lazy relationship load (which would fire outside the greenlet and raise MissingGreenlet).
+    stmt = (
+        select(TriageReport)
+        .where(TriageReport.issue_id == issue_id)
+        .options(selectinload(TriageReport.issue))
+    )
     result = await db.execute(stmt)
     triage = result.scalar_one_or_none()
 
     if triage:
-        return TriageResponse.model_validate(triage.to_dict())
+        payload = triage.to_dict()
+        payload["body_summary"] = triage.issue.body_summary if triage.issue else None
+        return TriageResponse.model_validate(payload)
 
     # Fallback: check if issue exists to generate triage dynamically
     issue_stmt = select(Issue).where(Issue.id == issue_id)
@@ -70,6 +79,7 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
         issue_number=issue.issue_number,
         title=issue.title,
         body=issue.body,
+        body_summary=issue.body_summary,
         language=derive_language(issue.tech_stack, issue.domain),
         tech_stack=issue.tech_stack or [],
         localized_files=localized_dicts,
@@ -96,7 +106,9 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(triage_obj)
 
-    return TriageResponse.model_validate(triage_obj.to_dict())
+    payload = triage_obj.to_dict()
+    payload["body_summary"] = issue.body_summary  # issue already loaded above
+    return TriageResponse.model_validate(payload)
 
 
 @router.post("/triage/generate", response_model=TriageResponse, summary="On-Demand AI Triage Generation")

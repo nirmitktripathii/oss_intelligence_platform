@@ -16,7 +16,6 @@ class SemanticAnalysis(BaseModel):
     rationale: Optional[str] = None
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     provider: Optional[str] = Field(None, example="gemini:gemini-3.5-flash-lite")
-    # Repo files whose real source grounded the analysis (empty => issue-text only).
     grounded_files: List[str] = Field(default_factory=list)
     patch: Optional[Dict[str, Any]] = None
 
@@ -53,6 +52,10 @@ class TriageResponse(BaseModel):
     reproduction_instructions: str
     fix_plan_steps: List[FixPlanStep] = Field(default_factory=list)
     contributing_guidelines_summary: Optional[str] = None
+
+    # Canonical issue-body metadata. The raw body remains on IssueResponse; this field is
+    # only the optional condensed form used by AI synthesis for oversized descriptions.
+    body_summary: Optional[str] = None
 
     # AI enhancement layer — false/None means the deterministic AST floor was served as-is.
     llm_enhanced: bool = False

@@ -90,6 +90,33 @@ Respond in valid JSON:
 }}
 """
 
+SUMMARIZE_SYSTEM_PROMPT = """You are a technical summarizer condensing an over-long GitHub issue
+description so that downstream automated triage keeps every actionable detail. You never invent
+information, never editorialize, and never drop a constraint. Output valid JSON only."""
+
+SUMMARIZE_PROMPT_TEMPLATE = """### TASK: LOSSLESS CONDENSATION OF A LONG ISSUE DESCRIPTION
+Condense the issue description below to STRICTLY UNDER {max_chars} characters while preserving
+every point. Do NOT summarize away specifics — keep all of: contribution guidelines, procedures,
+rules, constraints, acceptance / validation criteria, reproduction steps, error messages and stack
+traces, file paths, function/class/variable names, version numbers, commands, and links. Drop only
+pure redundancy, greetings, and decorative formatting. Do not add any information that is not in
+the source. Write dense technical prose (bullet fragments are fine); preserve code identifiers and
+paths verbatim.
+
+[ISSUE #{issue_number}: {title}]
+
+[FULL DESCRIPTION]
+\"\"\"
+{body}
+\"\"\"
+
+[OUTPUT FORMAT]
+Respond in valid JSON with a single key:
+{{
+    "summary": "The condensed description, strictly under {max_chars} characters, preserving all points."
+}}
+"""
+
 REPRO_SYNTHESIS_PROMPT_TEMPLATE = """### TASK: GENERATE MINIMAL STANDALONE BUG REPRODUCTION
 Synthesize an isolated, executable test script that reliably reproduces the reported failure.
 
@@ -208,7 +235,8 @@ class LLMTriageEngine:
     # ------------------------------------------------------------------ #
     @classmethod
     async def _call_openai_compatible(
-        cls, provider: str, model: str, system_prompt: str, prompt: str, temperature: float
+        cls, provider: str, model: str, system_prompt: str, prompt: str, temperature: float,
+        timeout: Optional[float] = None,
     ) -> Optional[str]:
         if provider == "groq":
             base_url, key = "https://api.groq.com/openai/v1", getattr(settings, "GROQ_API_KEY", None)
@@ -217,7 +245,7 @@ class LLMTriageEngine:
             key = getattr(settings, "OPENAI_API_KEY", None)
         if not key:
             return None
-        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        timeout = float(timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{base_url.rstrip('/')}/chat/completions",
@@ -239,12 +267,13 @@ class LLMTriageEngine:
 
     @classmethod
     async def _call_gemini(
-        cls, model: str, system_prompt: str, prompt: str, temperature: float
+        cls, model: str, system_prompt: str, prompt: str, temperature: float,
+        timeout: Optional[float] = None,
     ) -> Optional[str]:
         key = getattr(settings, "GEMINI_API_KEY", None)
         if not key:
             return None
-        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        timeout = float(timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
@@ -263,12 +292,13 @@ class LLMTriageEngine:
 
     @classmethod
     async def _call_ollama(
-        cls, model: str, system_prompt: str, prompt: str, temperature: float
+        cls, model: str, system_prompt: str, prompt: str, temperature: float,
+        timeout: Optional[float] = None,
     ) -> Optional[str]:
         base = getattr(settings, "OLLAMA_BASE_URL", None)
         if not base:
             return None
-        timeout = float(getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        timeout = float(timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 f"{base.rstrip('/')}/api/generate",
@@ -293,19 +323,22 @@ class LLMTriageEngine:
         prompt: str,
         system_prompt: str = TRIAGE_SYSTEM_PROMPT,
         temperature: float = 0.2,
+        timeout: Optional[float] = None,
     ) -> Optional[tuple]:
         """
         Try each configured provider in order. Returns ``(raw_text, "provider:model")``
         on the first success, or ``None`` when nothing is configured / every call fails.
+        ``timeout`` overrides LLM_TIMEOUT_SECONDS for this call (used by the lenient
+        background summarizer).
         """
         for provider, model in cls.resolve_chain():
             try:
                 if provider in ("openai", "groq"):
-                    text = await cls._call_openai_compatible(provider, model, system_prompt, prompt, temperature)
+                    text = await cls._call_openai_compatible(provider, model, system_prompt, prompt, temperature, timeout)
                 elif provider == "gemini":
-                    text = await cls._call_gemini(model, system_prompt, prompt, temperature)
+                    text = await cls._call_gemini(model, system_prompt, prompt, temperature, timeout)
                 elif provider == "ollama":
-                    text = await cls._call_ollama(model, system_prompt, prompt, temperature)
+                    text = await cls._call_ollama(model, system_prompt, prompt, temperature, timeout)
                 else:
                     text = None
                 if text:
@@ -325,6 +358,58 @@ class LLMTriageEngine:
         result = await cls.query_llm_with_provenance(prompt, system_prompt, temperature)
         return result[0] if result else None
 
+    # ------------------------------------------------------------------ #
+    # Long-description handling (Q1)
+    # ------------------------------------------------------------------ #
+    @classmethod
+    def prepare_llm_body(cls, body: Optional[str], body_summary: Optional[str] = None) -> str:
+        """
+        Resolve the effective description to feed the LLM synthesis layer.
+
+        Prefers a precomputed ``body_summary`` (already condensed to < the cap at index
+        time, preserving every point). Otherwise returns the body unchanged when it fits,
+        or a hard truncation to the cap as an honest last resort when no summary exists
+        (e.g. no LLM provider was configured at index time). Deterministic AST/repro
+        localization keep the FULL raw body — only this synthesis path uses the summary.
+        """
+        max_chars = int(getattr(settings, "LLM_BODY_MAX_CHARS", 8000))
+        if body_summary:
+            return body_summary
+        text = body or ""
+        return text if len(text) <= max_chars else text[:max_chars]
+
+    @classmethod
+    async def summarize_issue_body(cls, body: str, issue_number: int = 0, title: str = "") -> Optional[str]:
+        """
+        Condense an over-long issue body to < LLM_BODY_MAX_CHARS with a SINGLE LLM call
+        (fast flash-lite), preserving every point. Returns the summary string, or ``None``
+        when no provider is configured / the call fails / parsing fails — callers then fall
+        back to a hard truncation (never fabricate). Uses a lenient background timeout.
+        """
+        max_chars = int(getattr(settings, "LLM_BODY_MAX_CHARS", 8000))
+        prompt = SUMMARIZE_PROMPT_TEMPLATE.format(
+            max_chars=max_chars,
+            issue_number=issue_number,
+            title=title,
+            body=body,
+        )
+        result = await cls.query_llm_with_provenance(
+            prompt,
+            system_prompt=SUMMARIZE_SYSTEM_PROMPT,
+            temperature=0.1,
+            timeout=float(getattr(settings, "LLM_SUMMARY_TIMEOUT_SECONDS", 60.0)),
+        )
+        if not result:
+            return None
+        parsed = cls._coerce_json(result[0])
+        summary = (parsed or {}).get("summary") if isinstance(parsed, dict) else None
+        if not summary or not isinstance(summary, str):
+            return None
+        summary = summary.strip()
+        # Enforce the ceiling even if the model overshot; a clipped summary still beats the
+        # raw body and keeps the stored value within contract.
+        return summary[:max_chars] if len(summary) > max_chars else summary
+
     @classmethod
     async def synthesize_semantic_root_cause(
         cls,
@@ -337,11 +422,13 @@ class LLMTriageEngine:
         tech_stack: List[str],
         localized_files: List[Dict[str, Any]],
         source_context: str = "",
+        body_summary: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Invoke the LLM with ROOT_CAUSE_PROMPT_TEMPLATE and return the parsed result
         stamped with the ``_provider`` that produced it, or ``None`` to keep AST-only.
         ``source_context`` is the real repository code fetched for grounding (may be empty).
+        ``body_summary`` (when present) is the precomputed condensation of an over-long body.
         """
         prompt = ROOT_CAUSE_PROMPT_TEMPLATE.format(
             repo_owner=repo_owner,
@@ -350,7 +437,7 @@ class LLMTriageEngine:
             tech_stack=", ".join(tech_stack),
             issue_number=issue_number,
             title=title,
-            body=(body or "")[:2000],
+            body=cls.prepare_llm_body(body, body_summary),
             localized_files_json=json.dumps(localized_files, indent=2),
             source_context=source_context.strip() or "(no source could be fetched for the localized files)",
         )
@@ -373,6 +460,7 @@ class LLMTriageEngine:
         title: str,
         body: str,
         primary_file: str,
+        body_summary: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Invokes LLM with CODE_PATCH_DIFF_PROMPT_TEMPLATE."""
         prompt = CODE_PATCH_DIFF_PROMPT_TEMPLATE.format(
@@ -381,7 +469,7 @@ class LLMTriageEngine:
             primary_file=primary_file,
             issue_number=issue_number,
             title=title,
-            body=(body or "")[:2000],
+            body=cls.prepare_llm_body(body, body_summary),
         )
         result = await cls.query_llm_with_provenance(prompt)
         if not result:
@@ -400,6 +488,7 @@ class LLMTriageEngine:
         title: str,
         body: str,
         language: str,
+        body_summary: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Invokes LLM with REPRO_SYNTHESIS_PROMPT_TEMPLATE."""
         prompt = REPRO_SYNTHESIS_PROMPT_TEMPLATE.format(
@@ -408,7 +497,7 @@ class LLMTriageEngine:
             language=language,
             issue_number=issue_number,
             title=title,
-            body=(body or "")[:2000],
+            body=cls.prepare_llm_body(body, body_summary),
         )
         result = await cls.query_llm_with_provenance(prompt)
         if not result:

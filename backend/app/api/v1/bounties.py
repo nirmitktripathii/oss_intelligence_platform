@@ -66,7 +66,7 @@ async def list_bounties(
                 difficulty=issue.difficulty,
                 estimated_hours=issue.estimated_hours,
                 bounty_amount_usd=amount,
-                bounty_source=issue.bounty_source or "GitScout Index",
+                bounty_source=issue.bounty_source or "Unknown",
                 bounty_url=issue.bounty_url or issue.html_url,
                 hourly_roi=roi,
                 github_created_at=issue.github_created_at,

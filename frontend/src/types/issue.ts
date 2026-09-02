@@ -33,6 +33,12 @@ export interface Issue {
   githubIssueNumber: number;
   title: string;
   body: string;
+  /**
+   * LLM-condensed body, present only when the original description exceeded the
+   * backend cap (LLM_BODY_MAX_CHARS). When set, it is a faithful <8000-char
+   * summary of `body`; when absent, `body` is already the full description.
+   */
+  bodySummary?: string;
   issueUrl: string;
   repository: Repository;
   domain: Domain;

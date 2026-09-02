@@ -17,7 +17,6 @@ def test_domain_registry_completeness():
     domains = set(r.domain for r in DOMAIN_REGISTRY)
     assert len(domains) == 6
 
-    # Verify lookup helper
     repo = get_repo_by_fullname("fastapi/fastapi")
     assert repo.owner == "fastapi"
     assert repo.repo == "fastapi"
@@ -25,51 +24,71 @@ def test_domain_registry_completeness():
 
 
 def test_bounty_extractor_regex_and_labels():
-    """Test multi-source bounty parsing."""
-    # 1. Label with amount
+    """Test multi-source bounty parsing without fabricated amounts or funders."""
     labels = [{"name": "bounty: $350", "color": "008672"}]
-    has_bounty, amount, source, url = BountyExtractor.parse_issue("Fix memory leak", "", labels, "https://github.com/foo/bar/issues/1")
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Fix memory leak", "", labels, "https://github.com/foo/bar/issues/1"
+    )
     assert has_bounty is True
     assert amount == 350.0
 
-    # 2. Body with Polar text & URL
     body = "Funding on Polar: $250\nhttps://polar.sh/fastapi/fastapi/issues/100"
-    has_bounty, amount, source, url = BountyExtractor.parse_issue("Support OpenAPI 3.1", body, [], "https://github.com/fastapi/fastapi/issues/100")
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Support OpenAPI 3.1", body, [], "https://github.com/fastapi/fastapi/issues/100"
+    )
     assert has_bounty is True
     assert amount == 250.0
     assert source == "Polar"
     assert "polar.sh" in url
 
-    # 3. Algora bot command
     body = "/bounty $500 on this issue"
-    has_bounty, amount, source, url = BountyExtractor.parse_issue("Add streaming RPC", body, [], "https://github.com/trpc/trpc/issues/50")
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Add streaming RPC", body, [], "https://github.com/trpc/trpc/issues/50"
+    )
     assert has_bounty is True
     assert amount == 500.0
     assert source == "Algora"
 
-    # 4. Unfunded issue
-    has_bounty, amount, source, url = BountyExtractor.parse_issue("Just a typo in docs", "Fixed word", [], "https://github.com/foo/bar/issues/2")
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Just a typo in docs", "Fixed word", [], "https://github.com/foo/bar/issues/2"
+    )
     assert has_bounty is False
     assert amount is None
+
+    # Regression: bounty signal without an amount must never become a fabricated $100.
+    labels = [{"name": "💰 Bounty", "color": "008672"}]
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Improve error messages", "No amount stated here", labels, "https://github.com/foo/bar/issues/3"
+    )
+    assert has_bounty is True
+    assert amount is None
+    assert source == "Unknown"
+    assert url == "https://github.com/foo/bar/issues/3"
+
+    # Regression: an unrelated numeric value must not manufacture a bounty or funder.
+    has_bounty, amount, source, url = BountyExtractor.parse_issue(
+        "Fix timeout", "Please increase the timeout to 100 seconds", [], "https://github.com/foo/bar/issues/4"
+    )
+    assert has_bounty is False
+    assert amount is None
+    assert source is None
+    assert url is None
 
 
 def test_classifier_difficulty_and_roi():
     """Test difficulty assignment and $/hr ROI calculation."""
-    # Easy
     easy_labels = [{"name": "good first issue", "color": "7057ff"}]
     diff = IssueClassifier.classify_difficulty(easy_labels, "Typo in README", "Fix spelling")
     assert diff == IssueDifficulty.EASY
     hours = IssueClassifier.estimate_hours(diff)
     assert hours <= 1.0
 
-    # Hard
     hard_labels = [{"name": "architecture", "color": "d73a4a"}]
     diff_hard = IssueClassifier.classify_difficulty(hard_labels, "RFC: Complete rewrite of executor", "Huge refactor")
     assert diff_hard == IssueDifficulty.HARD
     hours_hard = IssueClassifier.estimate_hours(diff_hard)
     assert hours_hard >= 6.0
 
-    # ROI Calculation
     roi = IssueClassifier.calculate_hourly_roi(bounty_amount_usd=300.0, estimated_hours=2.0)
     assert roi == 150.0
 
@@ -80,7 +99,6 @@ async def test_github_client_fetch_issues_and_etag():
     """Verify GitHub client issue fetching, strict verification, and ETag caching."""
     client = GitHubClient(token="fake_token", base_url="https://api.github.com")
 
-    # Mock first response with ETag
     mock_issues = [
         {
             "id": 1,
@@ -124,10 +142,7 @@ async def test_github_client_fetch_issues_and_etag():
     assert len(issues) == 1
     assert issues[0]["number"] == 101
 
-    # Second request returns 304 Not Modified -> returns cached
-    respx.get("https://api.github.com/repos/fastapi/fastapi/issues").respond(
-        status_code=304,
-    )
+    respx.get("https://api.github.com/repos/fastapi/fastapi/issues").respond(status_code=304)
     cached_issues = await client.fetch_repo_issues("fastapi", "fastapi", per_page=10)
     assert len(cached_issues) == 1
     assert cached_issues[0]["number"] == 101

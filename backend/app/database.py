@@ -19,7 +19,6 @@ class Base(DeclarativeBase):
     pass
 
 
-# Configure async database engine
 connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
@@ -65,6 +64,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # nullable columns + their indexes — idempotent, dialect-agnostic, zero-infra. The
 # type tokens below are identical to what create_all emits for these column types on
 # both SQLite and PostgreSQL, so a migrated table matches a freshly-created one.
+#
+# Each statement runs in its own transaction and a failure is logged, NOT fatal: the
+# DDL is already guarded (ADD COLUMN only when the column is absent; CREATE INDEX IF
+# NOT EXISTS), so the realistic failure is a concurrent-boot race between two Render
+# instances planning the same ADD COLUMN — one wins, the other sees "already exists".
+# Crashing every worker on that benign race would take the whole service down on a
+# restart, which is strictly worse than logging and continuing.
 # ---------------------------------------------------------------------------- #
 _ADDITIVE_COLUMNS = {
     "triage_reports": {
@@ -72,8 +78,11 @@ _ADDITIVE_COLUMNS = {
         "llm_analysis": "JSON",
         "triage_confidence": "FLOAT",
     },
+    "issues": {
+        "body_summary": "TEXT",
+        "body_summary_hash": "VARCHAR(64)",
+    },
 }
-# index name -> (table, column). Names match SQLAlchemy's ix_<table>_<column> default.
 _ADDITIVE_INDEXES = {
     "ix_triage_reports_triage_confidence": ("triage_reports", "triage_confidence"),
 }
@@ -86,7 +95,7 @@ def _plan_migrations(sync_conn) -> List[str]:
     statements: List[str] = []
     for table, columns in _ADDITIVE_COLUMNS.items():
         if table not in tables:
-            continue  # create_all() already built it with every column
+            continue
         present = {c["name"] for c in inspector.get_columns(table)}
         for name, col_type in columns.items():
             if name not in present:
@@ -109,12 +118,13 @@ async def ensure_schema() -> None:
                 await conn.execute(text(statement))
             logger.info("[schema] applied: %s", statement)
         except Exception as exc:
+            # Benign in practice (e.g. a concurrent instance already added the column).
+            # Never fatal: startup must survive an idempotent re-run / boot race.
             logger.warning("[schema] skipped '%s': %s", statement, exc)
 
 
 async def init_db() -> None:
     """Initialize database tables, then apply additive migrations for existing ones."""
-    # Import all models to ensure metadata registration
     import app.models  # noqa: F401
 
     async with engine.begin() as conn:
