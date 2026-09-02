@@ -38,6 +38,9 @@ class IssueResponse(BaseModel):
     issue_number: int
     title: str
     body: Optional[str] = ""
+    # Present only when the original body exceeded the LLM synthesis cap and a
+    # precomputed summary was successfully stored. The raw `body` remains authoritative.
+    body_summary: Optional[str] = None
     html_url: str
     author: str = "unknown"
     domain: IssueDomain
