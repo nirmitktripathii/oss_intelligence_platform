@@ -72,6 +72,10 @@ _ADDITIVE_COLUMNS = {
         "llm_analysis": "JSON",
         "triage_confidence": "FLOAT",
     },
+    "issues": {
+        "body_summary": "TEXT",
+        "body_summary_hash": "VARCHAR(64)",
+    },
 }
 # index name -> (table, column). Names match SQLAlchemy's ix_<table>_<column> default.
 _ADDITIVE_INDEXES = {

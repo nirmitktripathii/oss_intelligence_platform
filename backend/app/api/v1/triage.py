@@ -70,6 +70,7 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
         issue_number=issue.issue_number,
         title=issue.title,
         body=issue.body,
+        body_summary=issue.body_summary,
         language=derive_language(issue.tech_stack, issue.domain),
         tech_stack=issue.tech_stack or [],
         localized_files=localized_dicts,

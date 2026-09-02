@@ -33,6 +33,8 @@ import {
   Network,
   Copy,
   Check,
+  FileText,
+  ChevronDown,
 } from 'lucide-react';
 
 interface IssueWorkbenchDrawerProps {
@@ -49,8 +51,18 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
   const [isGraphOpen, setIsGraphOpen] = React.useState(false);
   const [targetGraphFile, setTargetGraphFile] = React.useState<string | undefined>(undefined);
   const [copiedBranch, setCopiedBranch] = React.useState(false);
+  const [descExpanded, setDescExpanded] = React.useState(false);
+  const [descView, setDescView] = React.useState<'full' | 'summary'>('full');
 
   if (!issue) return null;
+
+  // The original GitHub description. `bodySummary` is only populated by the backend when
+  // the description exceeded the LLM cap and was condensed for AI triage — never fabricated,
+  // so we surface it as an explicitly labeled alternate view, not as the description itself.
+  const fullBody = issue.body?.trim() || '';
+  const hasSummary = Boolean(issue.bodySummary && issue.bodySummary.trim());
+  const shownBody = descView === 'summary' && hasSummary ? issue.bodySummary!.trim() : fullBody;
+  const isLongBody = shownBody.length > 700;
 
   const domainInfo = getDomainInfo(issue.domain);
   const diffInfo = getDifficultyInfo(issue.difficulty);
@@ -186,6 +198,71 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
               )}
             </div>
           </SheetHeader>
+
+          {/* Issue Description (full GitHub body; collapsible) */}
+          <div className="rounded-xl border border-border/80 bg-card/60 overflow-hidden">
+            <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-border/60 bg-card/80">
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Issue Description</span>
+              </div>
+              {hasSummary && (
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-background/80 p-0.5 text-[10px] font-medium">
+                  <button
+                    onClick={() => setDescView('full')}
+                    className={`px-2 py-0.5 rounded-md transition-all ${
+                      descView === 'full' ? 'bg-secondary text-primary' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Full
+                  </button>
+                  <button
+                    onClick={() => setDescView('summary')}
+                    className={`px-2 py-0.5 rounded-md transition-all ${
+                      descView === 'summary' ? 'bg-secondary text-accent' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    title="Condensed by a fast LLM for AI triage because the original exceeded the length cap"
+                  >
+                    AI Summary
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 py-3">
+              {shownBody ? (
+                <>
+                  {descView === 'summary' && (
+                    <p className="mb-2 text-[10px] leading-relaxed text-muted-foreground italic">
+                      Condensed by a fast LLM because the original description exceeded the triage
+                      length cap. This summary is what the AI diagnostics were given; switch to
+                      <span className="font-semibold text-foreground"> Full</span> for the verbatim text.
+                    </p>
+                  )}
+                  <div
+                    className={`whitespace-pre-wrap break-words text-xs leading-relaxed text-foreground/90 ${
+                      !descExpanded && isLongBody ? 'max-h-48 overflow-hidden' : ''
+                    }`}
+                  >
+                    {shownBody}
+                  </div>
+                  {isLongBody && (
+                    <button
+                      onClick={() => setDescExpanded((v) => !v)}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors"
+                    >
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${descExpanded ? 'rotate-180' : ''}`}
+                      />
+                      {descExpanded ? 'Show less' : 'Show full description'}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs italic text-muted-foreground">No description provided.</p>
+              )}
+            </div>
+          </div>
 
           {/* Workbench Tabs Navigation */}
           <div className="space-y-5">

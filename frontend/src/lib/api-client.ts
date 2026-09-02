@@ -323,6 +323,7 @@ class ApiClient {
       githubIssueNumber: issueNum,
       title: item.title || 'Untitled Issue',
       body: item.body || '',
+      bodySummary: item.body_summary ?? item.bodySummary ?? undefined,
       issueUrl: item.html_url ?? item.issue_url ?? item.issueUrl ?? `https://github.com/${repoOwner}/${repoName}/issues/${issueNum}`,
       repository: {
         name: repoName,

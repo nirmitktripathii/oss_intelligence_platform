@@ -29,6 +29,14 @@ class Issue(Base):
     issue_number: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     body: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    # Long-description handling: when body exceeds settings.LLM_BODY_MAX_CHARS it is
+    # condensed once (single flash-lite call at index time) into a <cap summary that
+    # every AI feature reuses instead of re-summarizing per request. NULL => the body
+    # already fits, or no LLM was available (read path falls back to body[:cap]).
+    body_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # sha256 of the exact body that produced body_summary; lets a re-scrape skip the
+    # LLM call when the description is unchanged (compute once).
+    body_summary_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     html_url: Mapped[str] = mapped_column(String(500), nullable=False)
     author: Mapped[str] = mapped_column(String(100), nullable=False, default="unknown")
     
@@ -67,6 +75,7 @@ class Issue(Base):
             "issue_number": self.issue_number,
             "title": self.title,
             "body": self.body or "",
+            "body_summary": self.body_summary,
             "html_url": self.html_url,
             "author": self.author,
             "domain": self.domain,

@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import hashlib
 import logging
 import sys
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from app.scrapers.domain_registry import DOMAIN_REGISTRY, get_repo_by_fullname
 from app.scrapers.github_client import GitHubClient
 from app.triage.ast_localizer import ASTLocalizer
 from app.triage.fix_planner import FixPlanner
+from app.triage.llm_engine import LLMTriageEngine
 from app.triage.repro_generator import ReproGenerator
 
 logging.basicConfig(
@@ -236,6 +238,63 @@ class ScraperOrchestrator:
 
         return issue_model, triage_model
 
+    async def _resolve_body_summary(
+        self,
+        issue_obj: Issue,
+        existing: Optional[Issue],
+    ) -> None:
+        """Populate issue_obj.body_summary / body_summary_hash for over-long descriptions.
+
+        Bodies at or under LLM_BODY_MAX_CHARS need no summary (NULL => read path uses
+        the verbatim body). A longer body is condensed exactly ONCE by a single
+        flash-lite call: the sha256 of the body is stored, so a re-scrape of an
+        unchanged description reuses the prior summary instead of calling the LLM
+        again. If no provider/key is configured the call returns None and we leave the
+        summary NULL — the read path then degrades honestly to body[:cap], never a
+        fabricated result.
+        """
+        body = issue_obj.body or ""
+        max_chars = int(getattr(settings, "LLM_BODY_MAX_CHARS", 8000))
+        if len(body) <= max_chars:
+            issue_obj.body_summary = None
+            issue_obj.body_summary_hash = None
+            return
+
+        body_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+        # Compute once: an unchanged body keeps the summary already in Neon.
+        if (
+            existing is not None
+            and existing.body_summary
+            and existing.body_summary_hash == body_hash
+        ):
+            issue_obj.body_summary = existing.body_summary
+            issue_obj.body_summary_hash = body_hash
+            return
+
+        try:
+            summary = await LLMTriageEngine.summarize_issue_body(
+                body,
+                issue_number=issue_obj.issue_number,
+                title=issue_obj.title or "",
+            )
+        except Exception as exc:  # never let summarization break indexing
+            logger.warning(
+                "[summary] failed for %s: %s — storing raw body, read path will truncate",
+                issue_obj.id,
+                exc,
+            )
+            summary = None
+
+        if summary:
+            issue_obj.body_summary = summary
+            issue_obj.body_summary_hash = body_hash
+        else:
+            # No provider/key or a failed call: keep it NULL so the read path falls
+            # back to body[:cap]. Leave the hash NULL too so a later scrape retries.
+            issue_obj.body_summary = None
+            issue_obj.body_summary_hash = None
+
     async def _upsert_issue_and_triage(
         self,
         session: AsyncSession,
@@ -248,10 +307,16 @@ class ScraperOrchestrator:
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
 
+        # Resolve the long-body summary (single LLM call, hash-guarded) now that the
+        # prior row — and any summary already stored for an unchanged body — is known.
+        await self._resolve_body_summary(issue_obj, existing)
+
         if existing:
             # Update fields
             existing.title = issue_obj.title
             existing.body = issue_obj.body
+            existing.body_summary = issue_obj.body_summary
+            existing.body_summary_hash = issue_obj.body_summary_hash
             existing.tech_stack = issue_obj.tech_stack
             existing.difficulty = issue_obj.difficulty
             existing.estimated_hours = issue_obj.estimated_hours

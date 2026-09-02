@@ -63,8 +63,20 @@ class Settings(BaseSettings):
     LLM_TRIAGE_ENABLED: bool = True          # master switch; False => always AST-only
     LLM_PROVIDER: Optional[str] = None       # force one of: gemini|groq|openai|ollama (else auto)
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
-    LLM_TIMEOUT_SECONDS: float = 20.0
+    LLM_TIMEOUT_SECONDS: float = 30.0        # interactive triage synthesis call budget
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
+
+    # Long issue descriptions: bodies up to this many characters are fed to the AI
+    # verbatim. A longer body is condensed ONCE at index time by a single fast
+    # flash-lite call into a <LLM_BODY_MAX_CHARS summary that preserves every point
+    # (guidelines, procedures, rules, constraints, repro steps) and is stored+indexed
+    # in Neon (Issue.body_summary). Deterministic AST/repro always use the FULL raw
+    # body; only the LLM synthesis layer consumes the summary. If no provider key is
+    # set the read path degrades honestly to a hard body[:LLM_BODY_MAX_CHARS] slice.
+    LLM_BODY_MAX_CHARS: int = 8000
+    # The summarization call runs in the background scraper (not a user request), so it
+    # gets a lenient timeout independent of the interactive path.
+    LLM_SUMMARY_TIMEOUT_SECONDS: float = 60.0
 
     # Google AI Studio free tier — all reachable via the same Gemini API. Defaults to
     # gemini-3.5-flash-lite; set LLM_MODEL to pick another. Free rate limits (RPM/TPM/RPD):
