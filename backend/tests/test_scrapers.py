@@ -52,6 +52,14 @@ def test_bounty_extractor_regex_and_labels():
     assert has_bounty is False
     assert amount is None
 
+    # 5. Bounty label present but NO parseable amount -> honest undisclosed amount.
+    # Must never fabricate a dollar figure (regression guard against the old
+    # hardcoded $100 baseline estimate).
+    labels = [{"name": "💰 Bounty", "color": "008672"}]
+    has_bounty, amount, source, url = BountyExtractor.parse_issue("Improve error messages", "No amount stated here", labels, "https://github.com/foo/bar/issues/3")
+    assert has_bounty is True
+    assert amount is None
+
 
 def test_classifier_difficulty_and_roi():
     """Test difficulty assignment and $/hr ROI calculation."""

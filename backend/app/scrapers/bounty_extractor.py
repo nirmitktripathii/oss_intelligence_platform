@@ -59,7 +59,7 @@ class BountyExtractor:
             return None
 
         detected_amount: Optional[float] = None
-        detected_source: str = "GitScout Index"
+        detected_source: str = "Unknown"
         detected_url: Optional[str] = None
 
         # Check for URLs first
@@ -109,7 +109,7 @@ class BountyExtractor:
             return "Opire"
         elif "gitcoin" in combined:
             return "Gitcoin"
-        return "GitScout Index"
+        return "Unknown"
 
     @classmethod
     def parse_issue(
@@ -140,13 +140,17 @@ class BountyExtractor:
             amount, source, b_url = text_res
             return True, amount, source, b_url or html_url
 
-        # 3. Check for bounty labels with unknown amount
+        # 3. Bounty label present but no amount could be parsed from labels or text.
+        # The label is a real signal that a bounty exists, but we must NOT invent a
+        # dollar figure. Return has_bounty=True with amount=None (undisclosed). Rows
+        # with a NULL amount are excluded from the ROI-ranked /bounties board
+        # (bounty_amount_usd >= 0 filters out NULL) and never contribute a fabricated
+        # ROI — they only surface as bounty-labeled on the general issues list.
         for label_obj in labels:
             name = label_obj.get("name", "") if isinstance(label_obj, dict) else str(label_obj)
             name_l = name.lower()
             if any(k in name_l for k in ["bounty", "funded", "reward", "💵", "algora", "polar"]):
                 source = cls.detect_source(name_l + " " + combined_text, "")
-                # Default baseline bounty estimate if tagged as bounty but amount unparsed
-                return True, 100.0, source, html_url
+                return True, None, source, html_url
 
         return False, None, None, None
