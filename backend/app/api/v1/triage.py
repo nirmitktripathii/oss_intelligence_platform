@@ -15,6 +15,7 @@ from app.schemas.triage import TriageResponse
 from app.triage.ast_localizer import ASTLocalizer
 from app.triage.enhancer import compute_triage_confidence, derive_language, semantic_enhance
 from app.triage.fix_planner import FixPlanner
+from app.triage.llm_engine import LLMTriageEngine
 from app.triage.repro_generator import ReproGenerator
 
 router = APIRouter(tags=["Triage & Diagnostics"])
@@ -46,6 +47,34 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
     triage = result.scalar_one_or_none()
 
     if triage:
+        # Lazy self-heal: a report persisted before a working LLM provider was configured is
+        # frozen AST-only (llm_enhanced=False) and would otherwise show "0% / Deterministic"
+        # forever, because this row is returned verbatim on every read. If a provider is now
+        # available, attempt one enrichment and persist the upgrade; on a miss we simply return
+        # the AST floor unchanged (never fabricated).
+        if not triage.llm_enhanced and triage.issue is not None and LLMTriageEngine.resolve_chain():
+            issue = triage.issue
+            localized_dicts = triage.localized_files or []
+            enrichment = await semantic_enhance(
+                cache_key=f"gitscout:triage:llm:{issue.id}",
+                repo_owner=issue.repo_owner,
+                repo_name=issue.repo_name,
+                issue_number=issue.issue_number,
+                title=issue.title,
+                body=issue.body,
+                body_summary=issue.body_summary,
+                language=derive_language(issue.tech_stack, issue.domain),
+                tech_stack=issue.tech_stack or [],
+                localized_files=localized_dicts,
+            )
+            if enrichment is not None:
+                triage.llm_enhanced = True
+                triage.llm_analysis = enrichment
+                triage.triage_confidence = compute_triage_confidence(enrichment, localized_dicts)
+                triage.updated_at = datetime.now(timezone.utc)
+                await db.commit()
+                await db.refresh(triage)
+
         payload = triage.to_dict()
         payload["body_summary"] = triage.issue.body_summary if triage.issue else None
         return TriageResponse.model_validate(payload)

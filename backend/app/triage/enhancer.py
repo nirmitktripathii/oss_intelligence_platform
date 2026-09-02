@@ -219,8 +219,14 @@ async def semantic_enhance(
         # Files whose real source grounded this analysis (empty => issue-text only).
         "grounded_files": grounded_files,
     }
-    # A result with no usable diagnosis is treated as a miss (stay AST-only).
+    # A result with no usable diagnosis is treated as a miss (stay AST-only). The model
+    # returned parseable JSON but omitted root_cause_summary — log its keys so this second
+    # silent-miss path (distinct from an unparseable body) is diagnosable in prod.
     if not enrichment["semantic_root_cause"]:
+        logger.warning(
+            "[triage] LLM (%s) returned JSON without root_cause_summary; keys=%s",
+            result.get("_provider"), sorted(k for k in result if k != "_provider"),
+        )
         return None
 
     await set_cached_json(

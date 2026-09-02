@@ -275,11 +275,13 @@ class LLMTriageEngine:
         if not key:
             return None
         timeout = float(timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+        # Pass the key via the x-goog-api-key header, NOT the query string: httpx logs the
+        # full request URL at INFO, so a ?key=... would leak the secret into Render's logs.
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.post(
                 url,
-                headers={"Content-Type": "application/json"},
+                headers={"Content-Type": "application/json", "x-goog-api-key": key},
                 json={
                     "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
                     "generationConfig": {"temperature": temperature, "responseMimeType": "application/json"},
@@ -453,6 +455,13 @@ class LLMTriageEngine:
         raw_json, provider_label = result
         parsed = cls._coerce_json(raw_json)
         if parsed is None:
+            # HTTP succeeded but the model's text isn't parseable JSON (e.g. a model that
+            # ignores responseMimeType and answers in prose). Log a truncated preview so a
+            # silent enrichment miss on a 200 names itself instead of vanishing.
+            logger.warning(
+                "[LLM] %s returned unparseable root-cause output; preview=%r",
+                provider_label, (raw_json or "")[:300],
+            )
             return None
         parsed["_provider"] = provider_label
         return parsed
