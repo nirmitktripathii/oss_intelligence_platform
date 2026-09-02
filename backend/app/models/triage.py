@@ -74,9 +74,9 @@ class TriageReport(Base):
             "llm_enhanced": bool(self.llm_enhanced),
             "llm_analysis": self.llm_analysis or None,
             "triage_confidence": self.triage_confidence,
-            # Keep the canonical raw issue body separate from the optional condensed body.
-            # The relationship is normally loaded by the triage endpoint.
-            "body_summary": self.issue.body_summary if self.issue else None,
+            # NOTE: body_summary lives on the Issue row, not here. It is injected by the
+            # triage endpoint from an eagerly-loaded issue — to_dict() stays IO-free so it
+            # can never trigger a lazy relationship load outside the async greenlet.
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }

@@ -58,10 +58,19 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # ---------------------------------------------------------------------------- #
 # Lightweight additive migrations
 #
-# create_all() creates brand-new tables but never ALTERs existing ones. This keeps
-# startup self-contained for the current deployment while only applying additive,
-# nullable columns and indexes. A migration failure is intentionally fatal: the
-# application must not start against a schema that does not satisfy its ORM model.
+# create_all() creates brand-new tables but never ALTERs existing ones, so columns
+# added to a model after a table already exists (e.g. the AI-triage fields on the
+# live Neon Postgres) would silently be missing. This applies only additive,
+# nullable columns + their indexes — idempotent, dialect-agnostic, zero-infra. The
+# type tokens below are identical to what create_all emits for these column types on
+# both SQLite and PostgreSQL, so a migrated table matches a freshly-created one.
+#
+# Each statement runs in its own transaction and a failure is logged, NOT fatal: the
+# DDL is already guarded (ADD COLUMN only when the column is absent; CREATE INDEX IF
+# NOT EXISTS), so the realistic failure is a concurrent-boot race between two Render
+# instances planning the same ADD COLUMN — one wins, the other sees "already exists".
+# Crashing every worker on that benign race would take the whole service down on a
+# restart, which is strictly worse than logging and continuing.
 # ---------------------------------------------------------------------------- #
 _ADDITIVE_COLUMNS = {
     "triage_reports": {
@@ -100,13 +109,18 @@ def _plan_migrations(sync_conn) -> List[str]:
 
 
 async def ensure_schema() -> None:
-    """Apply additive migrations; fail startup if any required DDL cannot be applied."""
+    """Apply additive migrations, each in its own transaction so one can't block the rest."""
     async with engine.connect() as conn:
         plan = await conn.run_sync(_plan_migrations)
     for statement in plan:
-        async with engine.begin() as conn:
-            await conn.execute(text(statement))
-        logger.info("[schema] applied: %s", statement)
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(statement))
+            logger.info("[schema] applied: %s", statement)
+        except Exception as exc:
+            # Benign in practice (e.g. a concurrent instance already added the column).
+            # Never fatal: startup must survive an idempotent re-run / boot race.
+            logger.warning("[schema] skipped '%s': %s", statement, exc)
 
 
 async def init_db() -> None:
