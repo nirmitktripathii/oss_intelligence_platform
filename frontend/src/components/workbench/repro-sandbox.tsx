@@ -6,7 +6,7 @@ import { CodeBlock } from './code-block';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/toast';
-import { Terminal, Copy, Check, AlertOctagon, Play } from 'lucide-react';
+import { Terminal, Copy, Check, AlertOctagon, Play, Sparkles, ShieldCheck } from 'lucide-react';
 
 interface ReproSandboxProps {
   reproduction: ReproSnippet | null;
@@ -72,6 +72,25 @@ export function ReproSandbox({ reproduction }: ReproSandboxProps) {
           </Badge>
         </div>
 
+        {/* Provenance: honest about whether this repro is LLM-grounded or a deterministic scaffold. */}
+        {reproduction.grounded ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">
+              <Sparkles className="h-2.5 w-2.5" /> AI-synthesized
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-1.5 py-0.5 font-semibold text-accent">
+              <ShieldCheck className="h-2.5 w-2.5" /> Calls the repo&apos;s real symbols
+            </span>
+            {reproduction.provider && (
+              <span className="text-muted-foreground">via {reproduction.provider}</span>
+            )}
+          </div>
+        ) : (
+          <div className="text-[10px] text-muted-foreground">
+            Deterministic scaffold — connect an LLM provider for a repro grounded in the real source.
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 bg-background p-3 rounded-xl border border-border shadow-inner">
           <code className="text-primary font-bold truncate flex-1 text-xs sm:text-sm">
             $ {reproduction.runCommand}
@@ -112,7 +131,10 @@ export function ReproSandbox({ reproduction }: ReproSandboxProps) {
         <CodeBlock
           code={reproduction.code}
           language={reproduction.language}
-          filename={`repro.${reproduction.language === 'python' ? 'py' : reproduction.language === 'typescript' ? 'ts' : 'sh'}`}
+          filename={
+            reproduction.filename ||
+            `repro.${reproduction.language === 'python' ? 'py' : reproduction.language === 'typescript' ? 'ts' : 'sh'}`
+          }
         />
       </div>
 

@@ -13,7 +13,12 @@ from app.models.issue import Issue
 from app.models.triage import TriageReport
 from app.schemas.triage import TriageResponse
 from app.triage.ast_localizer import ASTLocalizer
-from app.triage.enhancer import compute_triage_confidence, derive_language, semantic_enhance
+from app.triage.enhancer import (
+    ENRICHMENT_SCHEMA_VERSION,
+    compute_triage_confidence,
+    derive_language,
+    semantic_enhance,
+)
 from app.triage.fix_planner import FixPlanner
 from app.triage.llm_engine import LLMTriageEngine
 from app.triage.repro_generator import ReproGenerator
@@ -47,12 +52,19 @@ async def get_triage(issue_id: str, db: AsyncSession = Depends(get_db)):
     triage = result.scalar_one_or_none()
 
     if triage:
-        # Lazy self-heal: a report persisted before a working LLM provider was configured is
-        # frozen AST-only (llm_enhanced=False) and would otherwise show "0% / Deterministic"
-        # forever, because this row is returned verbatim on every read. If a provider is now
-        # available, attempt one enrichment and persist the upgrade; on a miss we simply return
-        # the AST floor unchanged (never fabricated).
-        if not triage.llm_enhanced and triage.issue is not None and LLMTriageEngine.resolve_chain():
+        # Lazy self-heal on read. Two cases upgrade in place:
+        #   (a) a report frozen AST-only (llm_enhanced=False) — persisted before a working LLM
+        #       provider existed — which would otherwise show "0% / Deterministic" forever; and
+        #   (b) an enhanced report from an OLDER enrichment schema (root-cause only, no grounded
+        #       repro/patch/CONTRIBUTING/re-ranking) — detected by a stale schema_version.
+        # Either way we attempt one enrichment and persist the upgrade; on a miss we return the
+        # existing row unchanged (AST floor or prior enrichment — never fabricated, never downgraded).
+        stored_analysis = triage.llm_analysis if isinstance(triage.llm_analysis, dict) else {}
+        needs_upgrade = (
+            not triage.llm_enhanced
+            or stored_analysis.get("schema_version") != ENRICHMENT_SCHEMA_VERSION
+        )
+        if needs_upgrade and triage.issue is not None and LLMTriageEngine.resolve_chain():
             issue = triage.issue
             localized_dicts = triage.localized_files or []
             enrichment = await semantic_enhance(

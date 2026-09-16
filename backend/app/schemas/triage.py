@@ -1,8 +1,54 @@
 """Pydantic v2 schemas for AI Triage & AST File Localization."""
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class RankedFile(BaseModel):
+    """An AST candidate re-ordered by the LLM with a newcomer-readable 'why this file'."""
+
+    model_config = ConfigDict(extra="allow")
+
+    file_path: str
+    priority: int = Field(2, ge=1, le=3, description="1 primary edit site, 2 supporting, 3 test/config")
+    reason: str = ""
+
+
+class GroundedReproduction(BaseModel):
+    """LLM reproduction script grounded in the localized files' real source."""
+
+    model_config = ConfigDict(extra="allow")
+
+    language: Optional[str] = None
+    filename: Optional[str] = None
+    code: Optional[str] = None
+    cli_command: Optional[str] = None
+    expected_failure: Optional[str] = None
+    provider: Optional[str] = None
+
+
+class GroundedPatch(BaseModel):
+    """LLM unified-diff patch for the primary edit site, grounded in real source."""
+
+    model_config = ConfigDict(extra="allow")
+
+    primary_file: Optional[str] = None
+    diff_snippet: Optional[str] = None
+    explanation: Optional[str] = None
+    regression_risk: Optional[str] = None
+    provider: Optional[str] = None
+
+
+class ContributingSummary(BaseModel):
+    """Concrete rule bullets distilled from the repo's REAL CONTRIBUTING guide, with its source."""
+
+    model_config = ConfigDict(extra="allow")
+
+    guidelines: List[str] = Field(default_factory=list)
+    source_path: Optional[str] = None
+    source_url: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class SemanticAnalysis(BaseModel):
@@ -10,6 +56,7 @@ class SemanticAnalysis(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    schema_version: Optional[str] = None
     semantic_root_cause: Optional[str] = None
     affected_subsystems: List[str] = Field(default_factory=list)
     investigation_entrypoint: Optional[str] = None
@@ -17,7 +64,11 @@ class SemanticAnalysis(BaseModel):
     confidence_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     provider: Optional[str] = Field(None, example="gemini:gemini-3.5-flash-lite")
     grounded_files: List[str] = Field(default_factory=list)
-    patch: Optional[Dict[str, Any]] = None
+    # Grounded enrichment layers (any may be None => that card keeps its deterministic floor).
+    localized_reranked: List[RankedFile] = Field(default_factory=list)
+    reproduction: Optional[GroundedReproduction] = None
+    patch: Optional[GroundedPatch] = None
+    contributing: Optional[ContributingSummary] = None
 
 
 class LocalizedFile(BaseModel):

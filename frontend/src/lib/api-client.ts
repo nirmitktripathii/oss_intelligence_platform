@@ -364,6 +364,61 @@ class ApiClient {
     // report is deterministic AST-only — surface that honestly rather than inventing content.
     const llm = res.llm_analysis || null;
     const enhanced = Boolean(res.llm_enhanced);
+
+    // ── Localized files, merged with the LLM re-ranking (rides the root-cause call). ──
+    // Files whose real source grounded the model, and the model's per-file priority + a
+    // newcomer-readable "why this file", let us surface an ordered, explained blast radius
+    // instead of a raw AST dump. When there is no re-ranking we keep the deterministic order.
+    const groundedSet = new Set<string>(Array.isArray(llm?.grounded_files) ? llm.grounded_files : []);
+    const reranked: any[] = enhanced && Array.isArray(llm?.localized_reranked) ? llm.localized_reranked : [];
+    const rerankByPath = new Map<string, any>();
+    reranked.forEach((r: any) => {
+      const p = r?.file_path || r?.filePath;
+      if (p) rerankByPath.set(p, r);
+    });
+    const baseFiles = (res.localized_files || res.localizedFiles || []).map((f: any) => {
+      const filePath = f.file_path || f.filePath || 'src/index.ts';
+      const rr = rerankByPath.get(filePath);
+      return {
+        filePath,
+        confidence: f.confidence ?? 0,
+        reason: f.rationale || f.reason || 'Direct symbol match in stack trace',
+        astSymbol: f.ast_symbol || f.astSymbol,
+        lineRange: f.line_range || f.lineRange,
+        diffSnippet: f.diff_snippet || f.diffSnippet,
+        changeType: f.change_type || f.changeType || 'modify',
+        priority: rr ? rr.priority : undefined,
+        whyThisFile: rr ? (rr.reason || undefined) : undefined,
+        aiRanked: Boolean(rr),
+        grounded: groundedSet.has(filePath),
+      };
+    });
+    // Order by LLM priority (1 = primary edit site) when re-ranked, AST confidence as tiebreak;
+    // un-ranked files fall to the end.
+    const localizedFiles = reranked.length
+      ? [...baseFiles].sort((a, b) => {
+          const pa = a.priority ?? 99;
+          const pb = b.priority ?? 99;
+          if (pa !== pb) return pa - pb;
+          return (b.confidence ?? 0) - (a.confidence ?? 0);
+        })
+      : baseFiles;
+
+    // ── Reproduction: prefer the grounded LLM script (calls the repo's real symbols). ──
+    const llmRepro = enhanced ? llm?.reproduction : null;
+    const reproGrounded = Boolean(llmRepro?.code);
+
+    // ── Grounded patch diff for the primary edit site (absent => no patch card). ──
+    const llmPatch = enhanced ? llm?.patch : null;
+    const patchDiff = llmPatch?.diff_snippet || llmPatch?.diffSnippet;
+
+    // ── CONTRIBUTING: prefer the summary of the repo's REAL guide over the template. ──
+    const llmContributing = enhanced ? llm?.contributing : null;
+    const realGuidelines =
+      Array.isArray(llmContributing?.guidelines) && llmContributing.guidelines.length
+        ? llmContributing.guidelines
+        : null;
+
     return {
       issueId: res.issue_id || issueId,
       summary: res.summary || 'AI diagnostic analysis completed for issue.',
@@ -378,21 +433,29 @@ class ApiClient {
         res.affected_subsystems ||
         res.affectedSubsystems ||
         [],
-      localizedFiles: (res.localized_files || res.localizedFiles || []).map((f: any) => ({
-        filePath: f.file_path || f.filePath || 'src/index.ts',
-        confidence: f.confidence ?? 0,
-        reason: f.rationale || f.reason || 'Direct symbol match in stack trace',
-        astSymbol: f.ast_symbol || f.astSymbol,
-        lineRange: f.line_range || f.lineRange,
-        diffSnippet: f.diff_snippet || f.diffSnippet,
-        changeType: f.change_type || f.changeType || 'modify',
-      })),
+      localizedFiles,
       reproduction: {
-        language: res.reproduction?.language || res.reproduction_lang || 'python',
-        code: res.reproduction?.code || res.reproduction_code || '# Minimal repro\nprint("Reproducing...")',
-        runCommand: res.reproduction?.run_command || res.reproduction_instructions || 'pytest tests/',
-        expectedFailure: res.reproduction?.expected_failure || 'AssertionError: unexpected return value',
+        language: (llmRepro?.language || res.reproduction?.language || res.reproduction_lang || 'python')
+          .toString()
+          .toLowerCase() as any,
+        code:
+          llmRepro?.code ||
+          res.reproduction?.code ||
+          res.reproduction_code ||
+          '# Minimal repro\nprint("Reproducing...")',
+        runCommand:
+          llmRepro?.cli_command ||
+          res.reproduction?.run_command ||
+          res.reproduction_instructions ||
+          'pytest tests/',
+        expectedFailure:
+          llmRepro?.expected_failure ||
+          res.reproduction?.expected_failure ||
+          'AssertionError: unexpected return value',
         environmentNotes: res.reproduction?.environment_notes,
+        filename: llmRepro?.filename,
+        provider: llmRepro?.provider,
+        grounded: reproGrounded,
       },
       fixBlueprint: (res.fix_blueprint || res.fix_plan_steps || []).map((step: any, idx: number) => ({
         stepNumber: step.step_number || step.stepNumber || idx + 1,
@@ -402,18 +465,24 @@ class ApiClient {
         guidelineRule: step.guideline_rule || step.guidelineRule,
         validationCommand: step.validation_command || step.validationCommand,
       })),
-      contributingGuidelinesSummary: Array.isArray(res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
-        ? (res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
-        : typeof (res.contributing_guidelines_summary || res.contributingGuidelinesSummary) === 'string'
-        ? (res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
-            .split('\n')
-            .map((l: string) => l.replace(/^[-*#\s]+/, '').trim())
-            .filter((l: string) => l.length > 3)
-        : [
-            'Follow Conventional Commits specification for PR title and commit messages',
-            'Add unit tests covering both positive and boundary failure conditions',
-            'Pass all repository linters and typechecks before PR submission',
-          ],
+      contributingGuidelinesSummary:
+        realGuidelines ||
+        (Array.isArray(res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
+          ? (res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
+          : typeof (res.contributing_guidelines_summary || res.contributingGuidelinesSummary) === 'string'
+          ? (res.contributing_guidelines_summary || res.contributingGuidelinesSummary)
+              .split('\n')
+              .map((l: string) => l.replace(/^[-*#\s]+/, '').trim())
+              .filter((l: string) => l.length > 3)
+          : [
+              'Follow Conventional Commits specification for PR title and commit messages',
+              'Add unit tests covering both positive and boundary failure conditions',
+              'Pass all repository linters and typechecks before PR submission',
+            ]),
+      contributingSource: llmContributing?.source_path
+        ? { path: llmContributing.source_path, url: llmContributing.source_url }
+        : undefined,
+      contributingProvider: llmContributing?.provider,
       branchingConvention: res.branching_convention || res.branchingConvention || `fix/issue-${issueId.split('#')[1] || 'patch'}`,
       suggestedPrTitle: res.suggested_pr_title || res.suggestedPrTitle || `fix: resolve issue ${issueId}`,
       generatedAt: res.generated_at || res.generatedAt || new Date().toISOString(),
@@ -425,6 +494,15 @@ class ApiClient {
       llmEnhanced: enhanced,
       provider: llm?.provider,
       groundedFiles: Array.isArray(llm?.grounded_files) ? llm.grounded_files : [],
+      patch: patchDiff
+        ? {
+            primaryFile: llmPatch.primary_file || llmPatch.primaryFile || '',
+            diffSnippet: patchDiff,
+            explanation: llmPatch.explanation,
+            regressionRisk: llmPatch.regression_risk || llmPatch.regressionRisk,
+            provider: llmPatch.provider,
+          }
+        : undefined,
       isDemo: false,
     };
   }

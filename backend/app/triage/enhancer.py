@@ -8,6 +8,7 @@ nothing usable, ``semantic_enhance`` returns ``None`` and the caller keeps the
 deterministic AST result. Nothing here fabricates an AI answer.
 """
 
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -17,6 +18,19 @@ from app.scrapers.github_client import GitHubClient
 from app.triage.llm_engine import LLMTriageEngine
 
 logger = logging.getLogger("gitscout.triage.enhancer")
+
+# Bump when the shape of the enrichment dict changes so stale (root-cause-only) cache
+# entries are ignored and re-synthesized with the richer repro/patch/contributing fields.
+ENRICHMENT_SCHEMA_VERSION = "v2"
+
+# Where real CONTRIBUTING guides commonly live, in priority order.
+_CONTRIBUTING_CANDIDATES = [
+    "CONTRIBUTING.md",
+    ".github/CONTRIBUTING.md",
+    "docs/CONTRIBUTING.md",
+    "CONTRIBUTING.rst",
+    "CONTRIBUTING",
+]
 
 # Rough language hints derived from an issue's tech_stack tags.
 _LANG_HINTS = {
@@ -154,6 +168,149 @@ async def gather_source_context(
     return ("\n\n".join(blocks), grounded)
 
 
+def _normalize_ranked_files(
+    ranked: Any, localized_files: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Normalize the LLM's ``ranked_files`` into [{file_path, priority, reason}], keeping only
+    paths that actually appear in the AST-localized candidates (never a hallucinated path).
+    Returns [] when the model gave nothing usable — the frontend then shows the AST order.
+    """
+    if not isinstance(ranked, list):
+        return []
+    known = {(lf.get("file_path") or "").strip() for lf in localized_files if isinstance(lf, dict)}
+    out: List[Dict[str, Any]] = []
+    for item in ranked:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("file_path") or "").strip()
+        if not path or (known and path not in known):
+            continue
+        try:
+            priority = int(item.get("priority") or 2)
+        except (TypeError, ValueError):
+            priority = 2
+        out.append({
+            "file_path": path,
+            "priority": max(1, min(3, priority)),
+            "reason": str(item.get("reason") or "").strip(),
+        })
+    return out
+
+
+async def fetch_contributing(
+    repo_owner: str, repo_name: str
+) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Fetch the repo's real CONTRIBUTING guide (first candidate that resolves), Upstash-cached.
+    Returns (text, source_path) or (None, None). Best-effort — never raises.
+    """
+    cache_key = f"gitscout:contributing:{repo_owner}/{repo_name}"
+    cached = await get_cached_json(cache_key)
+    if isinstance(cached, dict) and "text" in cached:
+        return cached.get("text"), cached.get("source_path")
+
+    client = GitHubClient()
+    ttl = int(getattr(settings, "CONTRIBUTING_CACHE_TTL_SECONDS", 604800))
+    for candidate in _CONTRIBUTING_CANDIDATES:
+        try:
+            text = await client.fetch_file_content(repo_owner, repo_name, candidate)
+        except Exception as exc:  # never let a fetch break enhancement
+            logger.debug("contributing fetch error for %s: %s", candidate, exc)
+            text = None
+        if text and text.strip():
+            await set_cached_json(cache_key, {"text": text, "source_path": candidate}, ttl_seconds=ttl)
+            return text, candidate
+    # Cache the negative result briefly so we don't re-probe every view.
+    await set_cached_json(cache_key, {"text": None, "source_path": None}, ttl_seconds=min(ttl, 86400))
+    return None, None
+
+
+async def _synth_reproduction(
+    *, repo_owner: str, repo_name: str, issue_number: int, title: str,
+    body: Optional[str], body_summary: Optional[str], language: str, source_context: str,
+) -> Optional[Dict[str, Any]]:
+    """Grounded LLM reproduction script, normalized, or None to keep the deterministic scaffold."""
+    if not getattr(settings, "LLM_SYNTH_REPRO", True):
+        return None
+    try:
+        result = await LLMTriageEngine.synthesize_reproduction_script(
+            repo_owner=repo_owner, repo_name=repo_name, issue_number=issue_number,
+            title=title, body=body or "", language=language,
+            source_context=source_context, body_summary=body_summary,
+        )
+    except Exception as exc:
+        logger.warning("[triage] repro synthesis failed, keeping scaffold: %r", exc)
+        return None
+    if not result or not str(result.get("code") or "").strip():
+        return None
+    return {
+        "language": result.get("language") or language,
+        "filename": result.get("filename"),
+        "code": result.get("code"),
+        "cli_command": result.get("cli_command"),
+        "expected_failure": result.get("expected_failure"),
+        "provider": result.get("_provider"),
+    }
+
+
+async def _synth_patch(
+    *, repo_owner: str, repo_name: str, issue_number: int, title: str,
+    body: Optional[str], body_summary: Optional[str], primary_file: str, source_context: str,
+) -> Optional[Dict[str, Any]]:
+    """Grounded LLM unified-diff patch, normalized, or None to omit the patch card."""
+    if not getattr(settings, "LLM_SYNTH_PATCH", True) or not primary_file:
+        return None
+    try:
+        result = await LLMTriageEngine.synthesize_code_patch(
+            repo_owner=repo_owner, repo_name=repo_name, issue_number=issue_number,
+            title=title, body=body or "", primary_file=primary_file,
+            source_context=source_context, body_summary=body_summary,
+        )
+    except Exception as exc:
+        logger.warning("[triage] patch synthesis failed, omitting patch: %r", exc)
+        return None
+    if not result or not str(result.get("diff_snippet") or "").strip():
+        return None
+    return {
+        "primary_file": primary_file,
+        "diff_snippet": result.get("diff_snippet"),
+        "explanation": result.get("explanation"),
+        "regression_risk": result.get("regression_risk"),
+        "provider": result.get("_provider"),
+    }
+
+
+async def _build_contributing(
+    *, repo_owner: str, repo_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Fetch the repo's REAL CONTRIBUTING guide and summarize it into concrete rule bullets.
+    Returns {guidelines, source_path, source_url} or None (caller keeps the template).
+    """
+    if not getattr(settings, "LLM_CONTRIBUTING", True):
+        return None
+    text, source_path = await fetch_contributing(repo_owner, repo_name)
+    if not text or not source_path:
+        return None
+    try:
+        bullets = await LLMTriageEngine.summarize_contributing(
+            repo_owner, repo_name, text, source_path
+        )
+    except Exception as exc:
+        logger.warning("[triage] contributing summary failed: %r", exc)
+        bullets = None
+    if not bullets:
+        return None
+    return {
+        "guidelines": bullets,
+        "source_path": source_path,
+        "source_url": f"https://github.com/{repo_owner}/{repo_name}/blob/HEAD/{source_path}",
+        # The chain that served this run — same provider that produced the other cards.
+        "provider": LLMTriageEngine.active_provider_label(),
+    }
+
+
 async def semantic_enhance(
     *,
     cache_key: str,
@@ -180,11 +337,20 @@ async def semantic_enhance(
     if not LLMTriageEngine.resolve_chain():
         return None
 
-    cached = await get_cached_json(cache_key)
+    # Version the cache key so stale root-cause-only entries (schema v1) are ignored and
+    # re-synthesized with the richer repro/patch/contributing/reranked fields. The version is
+    # injected INSIDE the "gitscout:" namespace (-> "gitscout:v2:...") so the app's own
+    # invalidate_cache_pattern("gitscout:*") still clears enrichment entries.
+    if cache_key.startswith("gitscout:"):
+        versioned_key = f"gitscout:{ENRICHMENT_SCHEMA_VERSION}:{cache_key[len('gitscout:'):]}"
+    else:
+        versioned_key = f"gitscout:{ENRICHMENT_SCHEMA_VERSION}:{cache_key}"
+    cached = await get_cached_json(versioned_key)
     if isinstance(cached, dict) and cached.get("semantic_root_cause"):
         return cached
 
-    # Real-code grounding: fetch the localized files' actual source for the prompt.
+    # Real-code grounding: fetch the localized files' actual source once, reused by the
+    # root-cause, reproduction, and patch prompts so the free-tier quota buys one fetch.
     source_context, grounded_files = await gather_source_context(
         repo_owner, repo_name, localized_files
     )
@@ -210,6 +376,7 @@ async def semantic_enhance(
         return None
 
     enrichment = {
+        "schema_version": ENRICHMENT_SCHEMA_VERSION,
         "semantic_root_cause": result.get("root_cause_summary"),
         "affected_subsystems": result.get("affected_subsystems") or [],
         "investigation_entrypoint": result.get("investigation_entrypoint"),
@@ -229,7 +396,62 @@ async def semantic_enhance(
         )
         return None
 
+    # LLM re-ranking of the AST candidates (no extra call — it rode along with the root
+    # cause). Kept only for paths that exist in the AST candidates; [] => frontend uses
+    # the deterministic AST order.
+    reranked = _normalize_ranked_files(result.get("ranked_files"), localized_files)
+    enrichment["localized_reranked"] = reranked
+
+    # Pick the primary edit target for the patch. Prefer the highest-ranked file we actually
+    # fetched source for (so the diff is grounded), then any grounded file, then the model's
+    # top pick, then the top AST candidate.
+    grounded_set = set(grounded_files)
+    primary_file = ""
+    for rf in reranked:
+        if rf["file_path"] in grounded_set:
+            primary_file = rf["file_path"]
+            break
+    if not primary_file and grounded_files:
+        primary_file = grounded_files[0]
+    if not primary_file and reranked:
+        primary_file = reranked[0]["file_path"]
+    if not primary_file:
+        for lf in localized_files:
+            p = (lf.get("file_path") or "").strip() if isinstance(lf, dict) else ""
+            if p:
+                primary_file = p
+                break
+
+    # Grounded reproduction, grounded patch diff, and the repo's REAL CONTRIBUTING guide, all
+    # in parallel — one wall-clock round trip instead of three. return_exceptions keeps a
+    # single failed synth from cancelling the others; each helper already degrades to None.
+    repro_res, patch_res, contributing_res = await asyncio.gather(
+        _synth_reproduction(
+            repo_owner=repo_owner, repo_name=repo_name, issue_number=issue_number,
+            title=title, body=body, body_summary=body_summary, language=language,
+            source_context=source_context,
+        ),
+        _synth_patch(
+            repo_owner=repo_owner, repo_name=repo_name, issue_number=issue_number,
+            title=title, body=body, body_summary=body_summary, primary_file=primary_file,
+            source_context=source_context,
+        ),
+        _build_contributing(repo_owner=repo_owner, repo_name=repo_name),
+        return_exceptions=True,
+    )
+
+    def _ok(res: Any) -> Optional[Dict[str, Any]]:
+        """A dict result is usable; an Exception (from return_exceptions) or None is a miss."""
+        if isinstance(res, Exception):
+            logger.warning("[triage] parallel synth raised: %r", res)
+            return None
+        return res if isinstance(res, dict) else None
+
+    enrichment["reproduction"] = _ok(repro_res)
+    enrichment["patch"] = _ok(patch_res)
+    enrichment["contributing"] = _ok(contributing_res)
+
     await set_cached_json(
-        cache_key, enrichment, ttl_seconds=int(getattr(settings, "LLM_CACHE_TTL_SECONDS", 604800))
+        versioned_key, enrichment, ttl_seconds=int(getattr(settings, "LLM_CACHE_TTL_SECONDS", 604800))
     )
     return enrichment

@@ -30,7 +30,7 @@ import {
   Coins,
   Clock,
   GitBranch,
-  Network,
+  Crosshair,
   Copy,
   Check,
   FileText,
@@ -121,10 +121,10 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                   size="sm"
                   onClick={() => handleOpenGraph()}
                   className="h-8 text-xs gap-1.5 text-accent border-accent/30 bg-accent/10 hover:bg-accent/20 transition-all"
-                  title="Explore AST Knowledge Graph"
+                  title="Blast radius — impact map for this issue"
                 >
-                  <Network className="h-3.5 w-3.5 text-accent" />
-                  <span className="hidden sm:inline">AST Graph</span>
+                  <Crosshair className="h-3.5 w-3.5 text-accent" />
+                  <span className="hidden sm:inline">Blast Radius</span>
                 </Button>
 
                 <Button
@@ -322,6 +322,7 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
                   issueId={issue.id}
                   fixBlueprint={report?.fixBlueprint || []}
                   suggestedPrTitle={report?.suggestedPrTitle}
+                  patch={report?.patch}
                 />
               </TabsContent>
             </Tabs>
@@ -404,11 +405,16 @@ export function IssueWorkbenchDrawer({ issue, isOpen, onClose }: IssueWorkbenchD
         issue={issue}
       />
 
-      {/* Graphify Knowledge Graph Modal */}
+      {/* Per-issue Blast Radius Modal — driven by the real localized/re-ranked files */}
       <GraphifyModal
         isOpen={isGraphOpen}
         onClose={() => setIsGraphOpen(false)}
         targetFile={targetGraphFile}
+        localizedFiles={report?.localizedFiles || []}
+        repoOwner={issue.repository.owner}
+        repoName={issue.repository.name}
+        issueNumber={issue.githubIssueNumber}
+        isEnhanced={report?.llmEnhanced}
       />
     </>
   );
