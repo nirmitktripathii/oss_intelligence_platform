@@ -5,7 +5,13 @@ import { LocalizedFile } from '@/types/triage';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CodeBlock } from './code-block';
-import { FileCode, Network, ChevronRight, Hash, Compass } from 'lucide-react';
+import { FileCode, Crosshair, ChevronRight, Hash, ShieldCheck, Sparkles } from 'lucide-react';
+
+const PRIORITY_META: Record<number, { label: string; className: string }> = {
+  1: { label: 'Edit here first', className: 'border-primary/40 bg-primary/10 text-primary' },
+  2: { label: 'Also likely to touch', className: 'border-accent/40 bg-accent/10 text-accent' },
+  3: { label: 'Tests & config', className: 'border-bounty-gold/40 bg-bounty-gold/10 text-bounty-gold' },
+};
 
 interface FileLocalizerProps {
   localizedFiles: LocalizedFile[];
@@ -29,17 +35,18 @@ export function FileLocalizer({ localizedFiles, onOpenGraph }: FileLocalizerProp
 
   return (
     <div className="space-y-4 font-mono text-xs text-foreground">
-      {/* 1. Blast Radius & Graph Action Banner */}
+      {/* 1. Blast Radius Action Banner */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/30 via-card/70 to-background p-4 sm:p-5 shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-accent font-bold text-sm">
             <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-accent/20 text-accent">
-              <Network className="h-3.5 w-3.5" />
+              <Crosshair className="h-3.5 w-3.5" />
             </span>
-            <span>Graphify AST Knowledge Graph Integration</span>
+            <span>Blast Radius — where the fix ripples outward</span>
           </div>
           <p className="text-xs text-muted-foreground font-sans leading-relaxed">
-            Trace caller/callee AST relationships, topological clusters, and calculate blast radius across the repository.
+            A per-issue impact map built from these real localized files: the center is where to edit
+            first, each ring outward is a wider zone to check. No mock graph — just this issue.
           </p>
         </div>
         <Button
@@ -48,8 +55,8 @@ export function FileLocalizer({ localizedFiles, onOpenGraph }: FileLocalizerProp
           onClick={() => onOpenGraph?.(selectedFile?.filePath)}
           className="border-accent/50 text-accent bg-accent/10 hover:bg-accent/20 gap-2 shrink-0 text-xs font-semibold shadow-[0_0_12px_hsl(var(--accent)/0.2)]"
         >
-          <Compass className="h-3.5 w-3.5 text-accent" />
-          <span>Launch AST Graph</span>
+          <Crosshair className="h-3.5 w-3.5 text-accent" />
+          <span>Open Blast Radius</span>
         </Button>
       </div>
 
@@ -67,6 +74,7 @@ export function FileLocalizer({ localizedFiles, onOpenGraph }: FileLocalizerProp
           {safeFiles.map((file) => {
             const isSelected = selectedFile?.filePath === file.filePath;
             const confidencePercent = Math.round(file.confidence * 100);
+            const priorityMeta = file.priority ? PRIORITY_META[file.priority] : undefined;
 
             return (
               <div
@@ -104,8 +112,31 @@ export function FileLocalizer({ localizedFiles, onOpenGraph }: FileLocalizerProp
                   </Badge>
                 </div>
 
+                {/* Priority tier + provenance chips (present only on the AI-re-ranked path) */}
+                {(priorityMeta || file.grounded || file.aiRanked) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-8">
+                    {priorityMeta && (
+                      <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${priorityMeta.className}`}>
+                        {priorityMeta.label}
+                      </span>
+                    )}
+                    {file.grounded && (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                        <ShieldCheck className="h-2.5 w-2.5" />
+                        Real source read
+                      </span>
+                    )}
+                    {file.aiRanked && (
+                      <span className="inline-flex items-center gap-1 rounded-md border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                        <Sparkles className="h-2.5 w-2.5" />
+                        AI-ranked
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <p className="mt-2 text-xs text-muted-foreground font-sans leading-relaxed pl-8">
-                  {file.reason || 'Stack trace signature and heuristic pattern matched core handler route.'}
+                  {file.whyThisFile || file.reason || 'Stack trace signature and heuristic pattern matched core handler route.'}
                 </p>
               </div>
             );

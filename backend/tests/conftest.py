@@ -1,6 +1,7 @@
 """Pytest configuration and async fixtures for GitScout backend tests."""
 
 import asyncio
+import fnmatch
 from datetime import datetime, timezone
 from typing import AsyncGenerator
 import httpx
@@ -35,6 +36,50 @@ TestingSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+
+
+@pytest.fixture(autouse=True)
+def hermetic_cache(monkeypatch):
+    """Isolate every test from the real Upstash Redis.
+
+    The production cache functions (get_cached_json / set_cached_json /
+    invalidate_cache_pattern / ping_redis_health) all route through
+    ``app.cache.get_redis_client()`` at call time, so swapping that single
+    factory for a per-test in-memory fake makes the whole suite deterministic
+    regardless of the Upstash creds in ``.env``. Without this, one un-mocked
+    test (real-Gemini dynamic generation) writes into the shared live cache and
+    later mocked tests read that stale enrichment, bypassing their mock.
+
+    A fresh dict per test preserves real read-after-write semantics within a
+    single request while guaranteeing no state leaks across tests.
+    """
+    store: dict = {}
+
+    class _FakeRedis:
+        def get(self, key):
+            return store.get(key)
+
+        def set(self, key, value, ex=None):
+            store[key] = value
+            return True
+
+        def keys(self, pattern="*"):
+            return [k for k in store if fnmatch.fnmatch(k, pattern)]
+
+        def delete(self, *keys):
+            removed = 0
+            for k in keys:
+                if k in store:
+                    del store[k]
+                    removed += 1
+            return removed
+
+        def ping(self):
+            return True
+
+    fake = _FakeRedis()
+    monkeypatch.setattr("app.cache.get_redis_client", lambda: fake)
+    return store
 
 
 @pytest_asyncio.fixture(scope="function")

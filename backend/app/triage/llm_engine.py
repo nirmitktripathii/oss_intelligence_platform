@@ -61,12 +61,20 @@ Respond in valid JSON. Set "confidence_score" to your genuine calibrated certain
 root-cause identification on a 0.0-1.0 scale — low when the issue text is vague or no stack
 trace / file reference was provided, high only when the evidence is strong. Never default to a
 fixed number.
+For "ranked_files", re-order the AST-localized candidate files by how likely each is the place a
+contributor should edit, MOST important first. Use ONLY file paths that appear in the localized
+candidates or the grounded source above — never invent a path. "priority" is 1 for the primary
+edit site, 2 for supporting, 3 for tests/config. "reason" is a short plain-language explanation a
+newcomer can act on ("this is where the None value is dereferenced").
 {{
     "root_cause_summary": "Concise 2-3 sentence technical diagnosis of why the bug occurs.",
     "affected_subsystems": ["Subsystem 1", "Subsystem 2"],
     "confidence_score": 0.0,
     "investigation_entrypoint": "path/to/primary/file.py",
-    "rationale": "Why this specific file/function is the root cause."
+    "rationale": "Why this specific file/function is the root cause.",
+    "ranked_files": [
+        {{"file_path": "path/to/primary/file.py", "priority": 1, "reason": "Plain-language why this file is the edit site."}}
+    ]
 }}
 """
 
@@ -81,12 +89,19 @@ Issue: #{issue_number} - {title}
 [PROBLEM DESCRIPTION]
 {body}
 
+[GROUNDED SOURCE CODE]
+Actual source fetched from the repository around the localized lines (line-numbered).
+Base the diff on THIS real code — match its style, indentation, and surrounding context, and
+keep hunk line numbers consistent with it. If this section is empty, produce a best-effort
+illustrative patch and say so in the explanation.
+{source_context}
+
 [OUTPUT FORMAT]
-Respond in valid JSON:
+Respond in valid JSON. Keep the diff MINIMAL — only the lines needed to fix the issue.
 {{
     "diff_snippet": "--- a/{primary_file}\n+++ b/{primary_file}\n@@ ... @@\n+ ...",
-    "explanation": "Explanation of the logic change and boundary guard added.",
-    "regression_risk": "Low/Medium/High with justification"
+    "explanation": "Plain-language explanation of the logic change and any guard added, written for a first-time contributor.",
+    "regression_risk": "Low/Medium/High with a one-line justification"
 }}
 """
 
@@ -117,6 +132,28 @@ Respond in valid JSON with a single key:
 }}
 """
 
+CONTRIBUTING_SUMMARY_SYSTEM_PROMPT = """You distill a repository's real CONTRIBUTING guide into the
+handful of concrete rules a first-time contributor must follow to get a PR merged. You never invent
+rules that are not in the provided text. Output valid JSON only."""
+
+CONTRIBUTING_SUMMARY_PROMPT_TEMPLATE = """### TASK: SUMMARIZE THE REPOSITORY'S REAL CONTRIBUTING GUIDE
+Below is the ACTUAL CONTRIBUTING guide fetched from {repo_owner}/{repo_name}. Extract the concrete,
+actionable rules a contributor must satisfy — branch/commit conventions, required tests, formatters/
+linters, DCO/sign-off or CLA, PR-linking, and any review checklist. Ground every bullet in the text;
+do not add generic advice that is not present.
+
+[CONTRIBUTING SOURCE ({source_path})]
+\"\"\"
+{contributing_text}
+\"\"\"
+
+[OUTPUT FORMAT]
+Respond in valid JSON:
+{{
+    "guidelines": ["Concrete rule 1 grounded in the guide.", "Concrete rule 2."]
+}}
+"""
+
 REPRO_SYNTHESIS_PROMPT_TEMPLATE = """### TASK: GENERATE MINIMAL STANDALONE BUG REPRODUCTION
 Synthesize an isolated, executable test script that reliably reproduces the reported failure.
 
@@ -127,6 +164,13 @@ Issue #{issue_number}: {title}
 
 [ERROR LOGS / DESCRIPTION]
 {body}
+
+[GROUNDED SOURCE CODE]
+Actual source fetched from the repository around the localized lines (line-numbered).
+Call the REAL functions/classes/imports you can see in this code so the repro exercises the
+actual code path — do not invent symbols. If this section is empty, write the closest self-
+contained repro you can from the issue text and note that assumption in a comment.
+{source_context}
 
 [OUTPUT FORMAT]
 Respond in valid JSON:
@@ -475,9 +519,10 @@ class LLMTriageEngine:
         title: str,
         body: str,
         primary_file: str,
+        source_context: str = "",
         body_summary: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Invokes LLM with CODE_PATCH_DIFF_PROMPT_TEMPLATE."""
+        """Invokes LLM with CODE_PATCH_DIFF_PROMPT_TEMPLATE, grounded in real source."""
         prompt = CODE_PATCH_DIFF_PROMPT_TEMPLATE.format(
             repo_owner=repo_owner,
             repo_name=repo_name,
@@ -485,6 +530,7 @@ class LLMTriageEngine:
             issue_number=issue_number,
             title=title,
             body=cls.prepare_llm_body(body, body_summary),
+            source_context=source_context.strip() or "(no source could be fetched for the localized files)",
         )
         result = await cls.query_llm_with_provenance(prompt)
         if not result:
@@ -503,9 +549,10 @@ class LLMTriageEngine:
         title: str,
         body: str,
         language: str,
+        source_context: str = "",
         body_summary: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Invokes LLM with REPRO_SYNTHESIS_PROMPT_TEMPLATE."""
+        """Invokes LLM with REPRO_SYNTHESIS_PROMPT_TEMPLATE, grounded in real source."""
         prompt = REPRO_SYNTHESIS_PROMPT_TEMPLATE.format(
             repo_owner=repo_owner,
             repo_name=repo_name,
@@ -513,6 +560,7 @@ class LLMTriageEngine:
             issue_number=issue_number,
             title=title,
             body=cls.prepare_llm_body(body, body_summary),
+            source_context=source_context.strip() or "(no source could be fetched for the localized files)",
         )
         result = await cls.query_llm_with_provenance(prompt)
         if not result:
@@ -521,3 +569,35 @@ class LLMTriageEngine:
         if parsed is not None:
             parsed["_provider"] = result[1]
         return parsed
+
+    @classmethod
+    async def summarize_contributing(
+        cls,
+        repo_owner: str,
+        repo_name: str,
+        contributing_text: str,
+        source_path: str,
+    ) -> Optional[List[str]]:
+        """
+        Distill a repo's real CONTRIBUTING guide into concrete rule bullets grounded in the
+        actual text. Returns a list of strings, or ``None`` when no provider is configured /
+        the call fails / parsing fails — callers then fall back to the deterministic template.
+        """
+        prompt = CONTRIBUTING_SUMMARY_PROMPT_TEMPLATE.format(
+            repo_owner=repo_owner,
+            repo_name=repo_name,
+            source_path=source_path,
+            # Bound the guide so the prompt stays free-tier friendly.
+            contributing_text=contributing_text[: int(getattr(settings, "LLM_CONTRIBUTING_MAX_CHARS", 6000))],
+        )
+        result = await cls.query_llm_with_provenance(
+            prompt, system_prompt=CONTRIBUTING_SUMMARY_SYSTEM_PROMPT, temperature=0.1
+        )
+        if not result:
+            return None
+        parsed = cls._coerce_json(result[0])
+        bullets = (parsed or {}).get("guidelines") if isinstance(parsed, dict) else None
+        if not isinstance(bullets, list):
+            return None
+        clean = [str(b).strip() for b in bullets if str(b).strip()]
+        return clean or None

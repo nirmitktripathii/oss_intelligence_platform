@@ -16,6 +16,7 @@ import {
   Copy,
   Check,
   Cpu,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ProblemBreakdownProps {
@@ -36,6 +37,9 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
   const provider = report?.provider;
   const confidencePct = Math.round((report?.confidenceScore ?? 0) * 100);
   const groundedFiles = report?.groundedFiles ?? [];
+  // CONTRIBUTING provenance: present only when the repo's REAL guide was fetched & summarized.
+  const contributingSource = report?.contributingSource;
+  const contributingProvider = report?.contributingProvider;
 
   const handleCopy = async (text: string, type: 'branch' | 'title') => {
     try {
@@ -167,12 +171,43 @@ export function ProblemBreakdown({ issue, report }: ProblemBreakdownProps) {
 
       {/* 3. Upstream CONTRIBUTING Guidelines */}
       <div className="rounded-2xl border border-accent/30 bg-gradient-to-br from-accent/20 via-card/60 to-background p-5 shadow-xl space-y-3.5">
-        <div className="flex items-center gap-2 text-foreground font-bold text-sm">
-          <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-accent/20 text-accent">
-            <FileText className="h-3.5 w-3.5" />
-          </span>
-          <span>Upstream CONTRIBUTING.md Guidelines</span>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-foreground font-bold text-sm">
+            <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-accent/20 text-accent">
+              <FileText className="h-3.5 w-3.5" />
+            </span>
+            <span>Upstream CONTRIBUTING Guidelines</span>
+          </div>
+          {contributingSource?.url && (
+            <a
+              href={contributingSource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-accent hover:text-accent/80 shrink-0"
+              title={contributingSource.path}
+            >
+              <span className="hidden sm:inline">View source</span>
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
         </div>
+
+        {/* Provenance — real guide summary vs generic template */}
+        {contributingSource ? (
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">
+              <ShieldCheck className="h-2.5 w-2.5" />
+              From this repo&apos;s real {contributingSource.path}
+            </span>
+            {contributingProvider && (
+              <span className="text-muted-foreground">summarized via {contributingProvider}</span>
+            )}
+          </div>
+        ) : (
+          <div className="text-[10px] text-muted-foreground">
+            Generic checklist — connect an LLM provider to summarize this repo&apos;s actual CONTRIBUTING guide.
+          </div>
+        )}
 
         <div className="space-y-2 pt-1">
           {guidelines.map((guide, i) => (

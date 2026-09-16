@@ -1,20 +1,41 @@
 'use client';
 
 import * as React from 'react';
-import { FixStep } from '@/types/triage';
+import { FixStep, GroundedPatch } from '@/types/triage';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { CodeBlock } from './code-block';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Circle, Copy, Check, GitPullRequest, ShieldCheck, Terminal } from 'lucide-react';
+import {
+  CheckCircle2,
+  Circle,
+  Copy,
+  Check,
+  GitPullRequest,
+  ShieldCheck,
+  Terminal,
+  FileDiff,
+  AlertTriangle,
+  Sparkles,
+} from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 
 interface FixChecklistProps {
   issueId: string;
   fixBlueprint: FixStep[];
   suggestedPrTitle?: string;
+  patch?: GroundedPatch;
 }
 
-export function FixChecklist({ issueId, fixBlueprint, suggestedPrTitle }: FixChecklistProps) {
+/** Map the LLM's "Low/Medium/High ..." regression risk to a chip style. */
+function riskStyle(risk?: string): { label: string; className: string } {
+  const first = (risk || '').trim().toLowerCase();
+  if (first.startsWith('high')) return { label: risk!, className: 'border-destructive/40 bg-destructive/10 text-destructive' };
+  if (first.startsWith('med')) return { label: risk!, className: 'border-bounty-gold/40 bg-bounty-gold/10 text-bounty-gold' };
+  if (first.startsWith('low')) return { label: risk!, className: 'border-primary/40 bg-primary/10 text-primary' };
+  return { label: risk || 'Unknown', className: 'border-border bg-card text-muted-foreground' };
+}
+
+export function FixChecklist({ issueId, fixBlueprint, suggestedPrTitle, patch }: FixChecklistProps) {
   const safeBlueprint = React.useMemo(
     () => (Array.isArray(fixBlueprint) ? fixBlueprint : []),
     [fixBlueprint]
@@ -25,6 +46,19 @@ export function FixChecklist({ issueId, fixBlueprint, suggestedPrTitle }: FixChe
     []
   );
   const [copiedTitle, setCopiedTitle] = React.useState(false);
+  const [copiedPatch, setCopiedPatch] = React.useState(false);
+
+  const handleCopyPatch = async () => {
+    if (!patch?.diffSnippet) return;
+    try {
+      await navigator.clipboard.writeText(patch.diffSnippet);
+      setCopiedPatch(true);
+      toast({ title: 'Patch Copied', description: 'Unified diff copied to clipboard.', type: 'success' });
+      setTimeout(() => setCopiedPatch(false), 2000);
+    } catch {
+      // fallback
+    }
+  };
 
   const toggleStep = (stepNumber: number) => {
     setCompletedSteps((prev) =>
@@ -97,6 +131,57 @@ export function FixChecklist({ issueId, fixBlueprint, suggestedPrTitle }: FixChe
             {copiedTitle ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
             <span>{copiedTitle ? 'Copied' : 'Copy Title'}</span>
           </Button>
+        </div>
+      )}
+
+      {/* 2.5 Grounded Suggested Patch — a real unified diff for the primary edit site */}
+      {patch?.diffSnippet && (
+        <div className="rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/15 via-card/60 to-background p-4 sm:p-5 shadow-xl space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-foreground flex items-center gap-2 text-sm">
+              <span className="flex items-center justify-center h-6 w-6 rounded-lg bg-primary/20 text-primary">
+                <FileDiff className="h-3.5 w-3.5" />
+              </span>
+              <span>Suggested Patch</span>
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyPatch}
+              className="h-7 text-[11px] gap-1 text-foreground border-border bg-card hover:bg-secondary shrink-0"
+            >
+              {copiedPatch ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+              <span>{copiedPatch ? 'Copied' : 'Copy Diff'}</span>
+            </Button>
+          </div>
+
+          {/* Provenance + target + regression risk */}
+          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-0.5 font-semibold text-primary">
+              <Sparkles className="h-2.5 w-2.5" /> AI-generated from real source
+            </span>
+            {patch.primaryFile && (
+              <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 py-0.5 font-mono font-semibold text-muted-foreground">
+                {patch.primaryFile}
+              </span>
+            )}
+            {patch.regressionRisk && (
+              <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-semibold ${riskStyle(patch.regressionRisk).className}`}>
+                <AlertTriangle className="h-2.5 w-2.5" /> Risk: {patch.regressionRisk}
+              </span>
+            )}
+          </div>
+
+          <CodeBlock code={patch.diffSnippet} language="diff" filename={patch.primaryFile || 'suggested.patch'} />
+
+          {patch.explanation && (
+            <p className="text-xs text-foreground/90 font-sans leading-relaxed">{patch.explanation}</p>
+          )}
+
+          <p className="text-[10px] text-muted-foreground leading-relaxed">
+            Review before applying — this is an AI-suggested starting point, not a verified fix.
+            {patch.provider ? ` Generated via ${patch.provider}.` : ''}
+          </p>
         </div>
       )}
 

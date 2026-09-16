@@ -100,6 +100,15 @@ class Settings(BaseSettings):
     LLM_SOURCE_MAX_CHARS: int = 6000          # total injected source budget (bounds prompt size)
     GITHUB_FILE_CACHE_TTL_SECONDS: int = 86400
 
+    # Grounded enrichment layers, each independently switchable (all reuse the fetched source
+    # and ride the same free-tier chain). False => that card falls back to its deterministic
+    # AST scaffold / template rather than an LLM answer.
+    LLM_SYNTH_REPRO: bool = True              # grounded reproduction script (real symbols)
+    LLM_SYNTH_PATCH: bool = True              # grounded unified-diff patch + regression risk
+    LLM_CONTRIBUTING: bool = True             # summarize the repo's REAL CONTRIBUTING guide
+    LLM_CONTRIBUTING_MAX_CHARS: int = 6000    # bound the guide text fed to the summarizer
+    CONTRIBUTING_CACHE_TTL_SECONDS: int = 604800  # cache a repo's CONTRIBUTING guide for 7 days
+
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
