@@ -17,6 +17,7 @@ from app.scrapers.bounty_extractor import BountyExtractor
 from app.scrapers.classifier import IssueClassifier
 from app.scrapers.domain_registry import DOMAIN_REGISTRY, get_repo_by_fullname
 from app.scrapers.github_client import GitHubClient
+from app.scrapers.noise_filter import NoiseFilter
 from app.triage.ast_localizer import ASTLocalizer
 from app.triage.fix_planner import FixPlanner
 from app.triage.llm_engine import LLMTriageEngine
@@ -166,6 +167,17 @@ class ScraperOrchestrator:
         author = raw_item.get("user", {}).get("login", "unknown") if raw_item.get("user") else "unknown"
         comments_count = raw_item.get("comments", 0)
         labels = raw_item.get("labels", [])
+
+        # Content gate: drop non-actionable items (bot-generated digests, newsletters,
+        # blog posts, awesome-lists). These slip in via the broad global bounty search,
+        # which full-text-matches "bounty" and thus catches prose that merely mentions it.
+        # GitScout only tracks solvable OSS bugs/features, never news or articles.
+        actionable, reason = NoiseFilter.is_actionable_issue(
+            title=title, body=body, author=author, labels=labels, repo_name=repo_name
+        )
+        if not actionable:
+            logger.info("[SKIP] Non-actionable item %s (%s): %s", issue_id, reason, title[:80])
+            return None, None
 
         repo_target = get_repo_by_fullname(repo_fullname)
         domain = repo_target.domain.value if hasattr(repo_target.domain, "value") else str(repo_target.domain)
@@ -390,6 +402,38 @@ class ScraperOrchestrator:
         logger.info(f"[OK] Pruning complete: purged {pruned_count} closed or stale issues.")
         return pruned_count
 
+    async def prune_noise(self, session: AsyncSession) -> int:
+        """Purge already-stored rows that are non-actionable content, not real issues.
+
+        Applies the same NoiseFilter gate used at ingestion to every stored row, so
+        digests / newsletters / blog posts / bot-automation that were indexed before the
+        filter existed are removed. The associated TriageReport is cascade-deleted.
+        No network calls — this runs purely against the local DB.
+        """
+        logger.info("[*] Scanning stored issues for non-actionable content to prune...")
+        stmt = select(Issue)
+        res = await session.execute(stmt)
+        all_issues = res.scalars().all()
+
+        pruned_count = 0
+        for iss in all_issues:
+            actionable, reason = NoiseFilter.is_actionable_issue(
+                title=iss.title or "",
+                body=iss.body or "",
+                author=iss.author,
+                labels=iss.labels or [],
+                repo_name=iss.repo_name,
+            )
+            if not actionable:
+                await session.delete(iss)
+                pruned_count += 1
+                logger.info("[PRUNED] Non-actionable %s (%s): %s", iss.id, reason, (iss.title or "")[:80])
+
+        if pruned_count > 0:
+            await session.commit()
+        logger.info(f"[OK] Noise pruning complete: purged {pruned_count} non-actionable rows.")
+        return pruned_count
+
 
 async def main():
     parser = argparse.ArgumentParser(description="GitScout Live Issue Scraper Runner")
@@ -397,6 +441,7 @@ async def main():
     parser.add_argument("--seed-live", action="store_true", help="Harvest and seed database with live issues")
     parser.add_argument("--limit-per-repo", type=int, default=4, help="Max issues to fetch per repository")
     parser.add_argument("--prune-closed", action="store_true", help="Verify and delete all closed/fixed issues from DB")
+    parser.add_argument("--prune-noise", action="store_true", help="Delete stored non-actionable content (digests/newsletters/blog posts/bot automation)")
     args = parser.parse_args()
 
     print("[*] Initializing GitScout Database...")
@@ -404,7 +449,10 @@ async def main():
 
     orchestrator = ScraperOrchestrator()
     async with async_session_maker() as session:
-        if args.prune_closed:
+        if args.prune_noise:
+            pruned = await orchestrator.prune_noise(session)
+            print(f"[OK] Pruned {pruned} non-actionable rows from database.")
+        elif args.prune_closed:
             pruned = await orchestrator.prune_closed_issues(session)
             print(f"[OK] Pruned {pruned} closed/stale issues from database.")
         else:
