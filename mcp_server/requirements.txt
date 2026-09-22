@@ -1,0 +1,6 @@
+# GitScout MCP server dependencies.
+# Official MCP SDK 2.x (FastMCP -> MCPServer). Negotiates protocol version
+# >= 2025-11-25 over the Streamable HTTP transport (the Alexa+ track's hard
+# requirement). Pin to the 2.x line; the server code uses the 2.x API.
+mcp>=2.2.0,<3
+httpx>=0.27.0
