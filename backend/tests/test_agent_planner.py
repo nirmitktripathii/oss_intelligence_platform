@@ -249,26 +249,28 @@ async def test_approval_cannot_be_replayed(planner, source, llm):
 
 @pytest.mark.asyncio
 async def test_follow_up_sees_the_earlier_turn(planner, llm):
+    sid, _ = await planner.store.create_session()
     llm.script += [_tool("demo.search", query="python"), _final("I found one issue.")]
-    first = await planner.start("find me a python issue", session_id="s1")
+    first = await planner.start("find me a python issue", session_id=sid)
 
     llm.script += [_final("It crashes on an empty config.")]
-    await planner.start("tell me about the first one", session_id="s1")
+    await planner.start("tell me about the first one", session_id=sid)
 
     follow_up_prompt = llm.prompts[-1]
     assert "Earlier in this conversation" in follow_up_prompt
     assert "find me a python issue" in follow_up_prompt
     assert "acme/widgets#7" in follow_up_prompt  # the id it needs to resolve "the first one"
-    assert first.session_id == "s1"
+    assert first.session_id == sid
 
 
 @pytest.mark.asyncio
 async def test_unanswered_approval_is_remembered_as_not_run(planner, source, llm):
+    sid, _ = await planner.store.create_session()
     llm.script += [_tool("demo.open_pr", title="Fix crash")]
-    await planner.start("open a PR for the fix", session_id="s1")
+    await planner.start("open a PR for the fix", session_id=sid)
 
     llm.script += [_final("It is still waiting for your go-ahead.")]
-    await planner.start("did that PR get opened?", session_id="s1")
+    await planner.start("did that PR get opened?", session_id=sid)
 
     assert "NOT RUN: still waiting for the user's approval." in llm.prompts[-1]
     assert source.calls == []
@@ -276,10 +278,12 @@ async def test_unanswered_approval_is_remembered_as_not_run(planner, source, llm
 
 @pytest.mark.asyncio
 async def test_other_sessions_are_not_visible(planner, llm):
+    one, _ = await planner.store.create_session()
+    two, _ = await planner.store.create_session()
     llm.script += [_final("First.")]
-    await planner.start("secret request", session_id="s1")
+    await planner.start("secret request", session_id=one)
     llm.script += [_final("Second.")]
-    await planner.start("hello", session_id="s2")
+    await planner.start("hello", session_id=two)
 
     assert "secret request" not in llm.prompts[-1]
 
@@ -394,6 +398,10 @@ async def test_api_lists_tools(client: httpx.AsyncClient, api_registry):
     assert gates == {"demo.search": False, "demo.open_pr": True}
 
 
+def _auth(mission: dict) -> dict:
+    return {"X-Session-Token": mission["session_token"]}
+
+
 @pytest.mark.asyncio
 async def test_api_mission_approval_round_trip(client: httpx.AsyncClient, api_registry, llm):
     llm.script += [_tool("demo.open_pr", title="Fix crash")]
@@ -401,18 +409,122 @@ async def test_api_mission_approval_round_trip(client: httpx.AsyncClient, api_re
     assert created.status_code == 200
     mission = created.json()
     assert mission["status"] == "awaiting_approval"
+    assert mission["session_token"]
 
-    fetched = await client.get(f"/api/v1/agent/missions/{mission['id']}")
+    fetched = await client.get(f"/api/v1/agent/missions/{mission['id']}", headers=_auth(mission))
     assert fetched.json()["steps"][0]["arguments"] == {"title": "Fix crash"}
+    assert fetched.json()["session_token"] is None  # shown once, never again
 
     llm.script += [_final("Opened.")]
-    approved = await client.post(f"/api/v1/agent/missions/{mission['id']}/approval", json={"approved": True})
+    url = f"/api/v1/agent/missions/{mission['id']}/approval"
+    approved = await client.post(url, json={"approved": True}, headers=_auth(mission))
     assert approved.status_code == 200
     assert approved.json()["status"] == "completed"
     assert api_registry.calls == [("open_pr", {"title": "Fix crash"})]
 
-    replay = await client.post(f"/api/v1/agent/missions/{mission['id']}/approval", json={"approved": True})
+    replay = await client.post(url, json={"approved": True}, headers=_auth(mission))
     assert replay.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_a_mission_id_alone_cannot_read_or_approve(client: httpx.AsyncClient, api_registry, llm):
+    llm.script += [_tool("demo.open_pr", title="Fix crash")]
+    mission = (await client.post("/api/v1/agent/missions", json={"utterance": "open a PR"})).json()
+    url = f"/api/v1/agent/missions/{mission['id']}"
+
+    for headers in ({}, {"X-Session-Token": "wrong"}):
+        assert (await client.get(url, headers=headers)).status_code == 404
+        assert (await client.post(f"{url}/approval", json={"approved": True}, headers=headers)).status_code == 404
+        assert (await client.post(f"{url}/approval/stream", json={"approved": True}, headers=headers)).status_code == 404
+
+    assert api_registry.calls == []  # nothing ran for the intruder
+    # Another conversation's token does not open this one either.
+    llm.script += [_final("Hi.")]
+    other = (await client.post("/api/v1/agent/missions", json={"utterance": "hello"})).json()
+    assert (await client.get(url, headers=_auth(other))).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_continuing_a_session_needs_its_token(client: httpx.AsyncClient, api_registry, llm):
+    llm.script += [_final("First.")]
+    first = (await client.post("/api/v1/agent/missions", json={"utterance": "hello"})).json()
+    body = {"utterance": "and again", "session_id": first["session_id"]}
+
+    assert (await client.post("/api/v1/agent/missions", json=body)).status_code == 403
+    assert (await client.post("/api/v1/agent/missions", json=body, headers={"X-Session-Token": "x"})).status_code == 403
+    # An id nobody created cannot be claimed either.
+    squat = {"utterance": "hi", "session_id": "chosen-by-me"}
+    assert (await client.post("/api/v1/agent/missions", json=squat)).status_code == 403
+
+    llm.script += [_final("Second.")]
+    second = await client.post("/api/v1/agent/missions", json=body, headers=_auth(first))
+    assert second.status_code == 200
+    assert second.json()["session_id"] == first["session_id"]
+    assert second.json()["session_token"] is None
+
+
+@pytest.mark.asyncio
+async def test_the_token_is_never_stored(planner, llm):
+    llm.script += [_final("Hi.")]
+    mission = await planner.start("hello")
+    token = mission.session_token
+    assert token
+
+    assert (await planner.store.get(mission.id)).session_token is None
+    assert token not in json.dumps(planner.store._missions)
+    assert token not in json.dumps(planner.store._sessions)  # only its hash is kept
+    assert await planner.store.check_session(mission.session_id, token)
+    assert not await planner.store.check_session(mission.session_id, token + "x")
+
+
+def _events(response: httpx.Response) -> List[tuple]:
+    out = []
+    for block in response.text.strip().split("\n\n"):
+        name, data = block.split("\n", 1)
+        out.append((name.removeprefix("event: "), json.loads(data.removeprefix("data: "))))
+    return out
+
+
+@pytest.mark.asyncio
+async def test_api_streams_progress_then_the_mission(client: httpx.AsyncClient, api_registry, llm):
+    llm.script += [_tool("demo.search", query="python"), _final("I found one issue.")]
+
+    response = await client.post("/api/v1/agent/missions/stream", json={"utterance": "find an issue"})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = _events(response)
+    assert [name for name, _ in events] == [
+        "mission_started", "thinking", "step", "tool_start", "tool_done", "thinking", "mission"
+    ]
+    started, final = events[0][1], events[-1][1]
+    assert started["session_token"] and started["session_token"] == final["session_token"]
+    assert dict(events)["tool_done"]["status"] == "done"
+    assert final["status"] == "completed" and final["speech"] == "I found one issue."
+
+
+@pytest.mark.asyncio
+async def test_api_stream_pauses_at_the_gate_and_resumes(client: httpx.AsyncClient, api_registry, llm):
+    llm.script += [_tool("demo.open_pr", title="Fix crash")]
+    events = _events(await client.post("/api/v1/agent/missions/stream", json={"utterance": "open a PR"}))
+    paused = events[-1][1]
+    assert events[-1][0] == "mission" and paused["status"] == "awaiting_approval"
+    assert "tool_start" not in [name for name, _ in events]  # nothing ran before approval
+
+    llm.script += [_final("Opened.")]
+    resumed = _events(await client.post(
+        f"/api/v1/agent/missions/{paused['id']}/approval/stream",
+        json={"approved": True}, headers=_auth(paused),
+    ))
+    assert [name for name, _ in resumed][:2] == ["tool_start", "tool_done"]
+    assert resumed[-1][1]["status"] == "completed"
+    assert api_registry.calls == [("open_pr", {"title": "Fix crash"})]
+
+    again = await client.post(
+        f"/api/v1/agent/missions/{paused['id']}/approval/stream",
+        json={"approved": True}, headers=_auth(paused),
+    )
+    assert again.status_code == 409
 
 
 @pytest.mark.asyncio

@@ -46,3 +46,14 @@ jobs:
             # Warn (not fail) so a transient miss doesn't spam failure notifications.
             echo "::warning::Backend health did not return 200 (got $http_code) after retries."
           fi
+
+      - name: Warm the MCP server
+        # The agent planner calls the GitScout MCP service; a cold start there adds a minute
+        # to the first mission. Any HTTP answer (even 400/406 to a bare GET) proves it is awake.
+        run: |
+          url="https://gitscout-mcp.onrender.com/mcp"
+          http_code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 90 --retry 3 --retry-delay 15 "$url" || echo "000")
+          echo "MCP HTTP status: $http_code"
+          if [ "$http_code" = "000" ]; then
+            echo "::warning::MCP server did not answer at $url (is the gitscout-mcp service deployed?)."
+          fi

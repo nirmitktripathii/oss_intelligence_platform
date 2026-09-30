@@ -38,6 +38,9 @@ class Mission(BaseModel):
 
     id: str
     session_id: str
+    # Secret that owns the session. Present ONLY in the response that created the session;
+    # send it back as the X-Session-Token header. Never stored, never returned again.
+    session_token: Optional[str] = None
     utterance: str
     status: MissionStatus = MissionStatus.RUNNING
     steps: List[MissionStep] = Field(default_factory=list)
@@ -54,7 +57,8 @@ class Mission(BaseModel):
 
 class MissionCreateRequest(BaseModel):
     utterance: str = Field(..., min_length=1, max_length=2000, example="Find me an easy Python bounty")
-    # Missions sharing a session_id form one conversation (follow-ups see earlier turns).
+    # Continue an existing conversation (follow-ups see earlier turns); requires the session's
+    # X-Session-Token header. Omit to start a new one — the response carries its token.
     session_id: Optional[str] = Field(None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 

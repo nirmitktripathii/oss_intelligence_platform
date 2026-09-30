@@ -113,6 +113,18 @@ for the Open Source mini-challenge.
     annotations are not trusted for this decision.
   - **Session memory.** Missions sharing a `session_id` see the last three turns, so "how would
     I fix the first one?" resolves without another search.
+  - **Ownership.** Starting a conversation returns a secret `session_token` exactly once (only
+    its hash is stored); reading a mission or answering its approval gate requires it as
+    `X-Session-Token`. A mission id alone grants nothing, a foreign mission answers 404, and a
+    session id nobody created cannot be claimed.
+  - **Progress streaming.** `POST /agent/missions/stream` and
+    `POST /agent/missions/{id}/approval/stream` answer with Server-Sent Events
+    (`mission_started`, `thinking`, `step`, `tool_start`, `tool_done`, then the final
+    `mission`), so a client can show progress instead of a minute of silence.
+  - **Deployable.** `deploy/render.yaml` gains a `gitscout-mcp` service (the MCP server, bound
+    to `0.0.0.0` so the SDK's localhost-only Host allowlist does not reject the public
+    hostname: a loopback bind answers `421`, verified) and the backend's `AGENT_MCP_SERVERS`;
+    the keep-alive workflow warms it too.
   - **Untrusted tool output.** Results are JSON-encoded and fenced as data in the prompt; the
     approval gate, not the prompt, is what stops injected text from causing a side effect.
   - Bounded: `AGENT_MAX_STEPS` tool calls per mission (default 6), recovery from up to two
@@ -121,12 +133,13 @@ for the Open Source mini-challenge.
   - **Dormant unless configured**: with `AGENT_MCP_SERVERS` unset the endpoints answer 503 and
     nothing else changes.
 - `mcp>=2.2.0,<3` dependency in the backend (MCP client).
-- Tests: `backend/tests/test_agent_planner.py` (24) covering the decision loop, approval and
-  rejection, replay protection, memory isolation between sessions, fence escaping, server-config
-  validation, the HTTP API, and the MCP client against an in-process MCP server.
+- Tests: `backend/tests/test_agent_planner.py` (29) covering the decision loop, approval and
+  rejection, replay protection, memory isolation between sessions, session-token ownership,
+  fence escaping, server-config validation, the HTTP and streaming API, and the MCP client
+  against an in-process MCP server.
 
 ### Verified
-- Backend suite: **108 passed**.
+- Backend suite: **113 passed**.
 - Live, end to end, on a developer machine: planner → local GitScout MCP server (Streamable
   HTTP) → hosted GitScout API, reasoning on `gemini:gemini-3.5-flash-lite`.
   - "Find me a beginner-friendly Python issue and explain what's wrong in it" → `search_issues`
@@ -135,24 +148,31 @@ for the Open Source mini-challenge.
   - With `analyze_issue` left out of `auto_approve`: the mission paused, ran the tool only after
     approval, then completed.
 
+  - Streaming, live: the first event arrives about 2 s after the request and each step shows
+    as it happens, instead of one answer after a minute.
+
 ### Not yet verified / known limits
-- **Not deployed.** The hosted backend does not run the planner yet; it needs the GitScout MCP
-  server hosted alongside it.
+- **Not deployed yet.** The Render config is written and the MCP server's public-host behaviour
+  is verified, but the `gitscout-mcp` service has not been created on Render, so the hosted
+  backend does not run the planner. The hosted backend also needs Redis (Upstash) configured:
+  with two workers, missions must be shared through it.
 - **Not yet run on Amazon Nova** (Bedrock quota restriction above). The planner is unchanged
   either way; only the provenance label will differ.
-- **No caller authentication** on the mission and approval endpoints: a mission id is an
-  unguessable token, but anyone holding it can approve. This must be closed before a
-  side-effecting tool (Git/CI, email) is connected.
-- **Latency.** Missions run synchronously; the first live mission took about a minute (mostly
-  the hosted triage call), which is too slow for voice without progress updates.
+- **Session tokens are bearer secrets.** Anyone who has one can act as that conversation, so a
+  client must keep it out of URLs and logs. There is no user login yet; add real per-user
+  authentication before a side-effecting tool (Git/CI, email) is connected to a public
+  deployment.
+- **Latency is hidden, not removed.** A full mission still takes about a minute when it runs the
+  hosted triage tool; streaming makes that visible progress rather than silence.
 
 ---
 
 ## Planned (tracked on the battle-plan board)
 - Enable the Bedrock provider on the hosted backend (set `AWS_BEARER_TOKEN_BEDROCK` on Render)
   once the account quota restriction is lifted, and record the first live Nova triage here.
-- Deploy the agent planner: host the GitScout MCP server next to the backend, add caller
-  authentication to the mission endpoints, and stream mission progress.
+- Create the `gitscout-mcp` service on Render, set `UPSTASH_REDIS_*` on the backend, and run
+  one mission against the hosted stack.
+- Real per-user authentication for the agent endpoints (before any side-effecting tool).
 - **Git/CI MCP** (branch · patch · run tests · CI status · draft PR) against one ephemeral
   demo sandbox.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an

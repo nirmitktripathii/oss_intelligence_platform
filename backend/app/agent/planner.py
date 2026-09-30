@@ -23,7 +23,7 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 from app.agent.store import MissionStore, mission_store
 from app.agent.tools import ToolError, ToolRegistry, ToolSpec
 from app.config import settings
@@ -39,6 +39,9 @@ RESULT_PROMPT_CHARS = 6000
 MEMORY_RESULT_PROMPT_CHARS = 3000
 MEMORY_MISSIONS = 3
 TOOL_DESCRIPTION_CHARS = 700
+
+# Progress callback: (event name, JSON-able payload). Used by the streaming endpoints.
+EventSink = Callable[[str, Dict[str, Any]], Awaitable[None]]
 
 PLANNER_SYSTEM_PROMPT = """You are Developer Mission Control, a voice assistant that helps a developer find, understand, fix, and communicate open-source work. You act only through the tools listed in the prompt.
 
@@ -192,21 +195,35 @@ class MissionPlanner:
     _locks: Dict[str, asyncio.Lock] = {}
 
     def __init__(self, registry: ToolRegistry, store: MissionStore = mission_store,
-                 max_steps: Optional[int] = None):
+                 max_steps: Optional[int] = None, on_event: Optional[EventSink] = None):
         self.registry = registry
         self.store = store
+        self._on_event = on_event
         self.max_steps = int(max_steps if max_steps is not None else getattr(settings, "AGENT_MAX_STEPS", 6))
 
     async def start(self, utterance: str, session_id: Optional[str] = None) -> Mission:
+        """
+        Run a new mission. ``session_id`` must be a session the caller has already proven it
+        owns; with none, a new session is created and its one-time token is set on the
+        returned mission (``session_token``).
+        """
+        token = None
+        if session_id is None:
+            session_id, token = await self.store.create_session()
         now = datetime.now(timezone.utc)
         mission = Mission(
             id=uuid.uuid4().hex,
-            session_id=session_id or uuid.uuid4().hex,
+            session_id=session_id,
+            session_token=token,
             utterance=utterance.strip(),
             created_at=now,
             updated_at=now,
         )
         await self.store.add_to_session(mission)
+        started = {"id": mission.id, "session_id": session_id}
+        if token:  # sent now so a client that disconnects mid-mission still gets its credential
+            started["session_token"] = token
+        await self._emit("mission_started", started)
         return await self._advance(mission)
 
     async def resolve_approval(self, mission_id: str, approved: bool, reason: Optional[str] = None) -> Mission:
@@ -230,6 +247,14 @@ class MissionPlanner:
         finally:
             self._locks.pop(mission_id, None)
 
+    async def _emit(self, event: str, data: Dict[str, Any]) -> None:
+        if self._on_event is None:
+            return
+        try:
+            await self._on_event(event, data)
+        except Exception:  # a broken progress listener must never break the mission
+            logger.warning("[AGENT] event sink failed on %r", event, exc_info=True)
+
     async def _save(self, mission: Mission) -> None:
         mission.updated_at = datetime.now(timezone.utc)
         await self.store.save(mission)
@@ -241,6 +266,7 @@ class MissionPlanner:
         return mission
 
     async def _execute(self, step: MissionStep) -> None:
+        await self._emit("tool_start", {"index": step.index, "tool": step.tool, "arguments": step.arguments})
         try:
             step.result = await self.registry.call(step.tool, step.arguments)
             step.status = StepStatus.DONE
@@ -249,6 +275,8 @@ class MissionPlanner:
         except Exception as exc:  # transport/timeout: the model sees the failure and adapts
             logger.warning("[AGENT] tool %s raised: %r", step.tool, exc)
             step.status, step.error = StepStatus.FAILED, f"{type(exc).__name__}: {exc}"
+        await self._emit("tool_done", {"index": step.index, "tool": step.tool, "status": step.status.value,
+                                       "error": step.error})
 
     async def _advance(self, mission: Mission) -> Mission:
         """Run the decision loop until the mission finishes, fails, or reaches an approval gate."""
@@ -261,6 +289,7 @@ class MissionPlanner:
         while True:
             remaining = self.max_steps - len(mission.steps)
             prompt = build_prompt(mission, catalog, history, remaining, feedback)
+            await self._emit("thinking", {"step": len(mission.steps) + 1})
             reply = await LLMTriageEngine.query_llm_with_provenance(
                 prompt, system_prompt=PLANNER_SYSTEM_PROMPT, temperature=0.1
             )
@@ -301,6 +330,8 @@ class MissionPlanner:
                 status=StepStatus.AWAITING_APPROVAL,
             )
             mission.steps.append(step)
+            await self._emit("step", {"index": step.index, "tool": step.tool, "arguments": step.arguments,
+                                      "thought": step.thought, "requires_approval": step.requires_approval})
             if spec.requires_approval:
                 mission.status = MissionStatus.AWAITING_APPROVAL
                 mission.speech = f"I'd like to run {spec.name}. {decision.thought} Should I go ahead?".replace("  ", " ")
