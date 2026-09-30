@@ -95,6 +95,12 @@ def no_real_bedrock(monkeypatch):
     monkeypatch.setattr(settings, "BEDROCK_AWS_PROFILE", None)
     monkeypatch.setattr(settings, "AWS_BEARER_TOKEN_BEDROCK", None)
 
+    # Provider cooldowns are process-wide state; never let one test's failure skip a provider
+    # in the next.
+    from app.triage.llm_engine import LLMTriageEngine
+
+    LLMTriageEngine._cooldown_until.clear()
+
 
 @pytest_asyncio.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:

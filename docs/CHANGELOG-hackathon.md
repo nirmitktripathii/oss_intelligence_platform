@@ -192,12 +192,17 @@ for the Open Source mini-challenge.
   with `KeyError('parts')` and failed the mission. It is now a provider miss, so the chain
   falls through. Regression test added (4 response shapes).
 
+- **Provider cooldown** (`LLM_PROVIDER_COOLDOWN_SECONDS`, default 120): a provider that raises is
+  skipped for that long while another can answer, so a broken Bedrock key or a zero quota costs
+  one slow call per window instead of ~5 s on every request. The last provider in the chain is
+  never skipped.
+
 ### Verified
 - `tsc`, `next lint` (no new warnings) and `next build` pass; `/alexa` is 117 kB first load.
 - Live in the browser against a local stack (GitScout MCP server + backend + Gemini): a spoken-style
   request ran `search_issues` and `get_issue` unattended, paused on `analyze_issue` for approval,
   and after Approve finished with a spoken answer and a markdown card on screen. The layout holds
-  at phone width. Backend triage tests: 20 passed.
+  at phone width. Backend triage and agent tests: 51 passed (full suite 117 before the cooldown change).
 
 ### Not verified
 - **Microphone input and spoken replies were not exercised** (the test browser has no speech

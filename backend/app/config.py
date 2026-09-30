@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
     LLM_TIMEOUT_SECONDS: float = 30.0        # interactive triage synthesis call budget
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
+    # After a provider raises, skip it for this long (when another provider is available) so a
+    # broken one (expired key, zero quota) costs one slow call per window, not one per request.
+    LLM_PROVIDER_COOLDOWN_SECONDS: float = 120.0
 
     # Long issue descriptions: bodies up to this many characters are fed to the AI
     # verbatim. A longer body is condensed ONCE at index time by a single fast

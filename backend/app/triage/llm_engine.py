@@ -8,6 +8,7 @@ code diff synthesis, and standalone bug reproduction generation.
 import asyncio
 import json
 import logging
+import time
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 import httpx
@@ -223,6 +224,9 @@ class LLMTriageEngine:
     provider is configured every method returns ``None`` so callers keep the
     deterministic result rather than fabricating one.
     """
+
+    # provider -> time.monotonic() until which it is skipped after a failure (per process).
+    _cooldown_until: Dict[str, float] = {}
 
     # Default model per provider (all reachable on a free tier). Override with LLM_MODEL.
     # Gemini/Gemma default to the free-tier flash-lite; other free Gemma options via the
@@ -470,7 +474,12 @@ class LLMTriageEngine:
         ``timeout`` overrides LLM_TIMEOUT_SECONDS for this call (used by the lenient
         background summarizer).
         """
-        for provider, model in cls.resolve_chain():
+        chain = cls.resolve_chain()
+        cooldown = float(getattr(settings, "LLM_PROVIDER_COOLDOWN_SECONDS", 0) or 0)
+        for position, (provider, model) in enumerate(chain):
+            # Skip a provider that just failed, unless it is the last one left to try.
+            if cooldown > 0 and position < len(chain) - 1 and time.monotonic() < cls._cooldown_until.get(provider, 0.0):
+                continue
             try:
                 if provider == "bedrock":
                     text = await cls._call_bedrock(model, system_prompt, prompt, temperature, timeout)
@@ -488,6 +497,8 @@ class LLMTriageEngine:
                 # %r so transport errors with an empty str() (httpx ReadTimeout/ConnectTimeout,
                 # which render as "") still name their type — otherwise prod is undiagnosable.
                 logger.warning("[LLM] %s invocation failed: %r", provider, exc)
+                if cooldown > 0:
+                    cls._cooldown_until[provider] = time.monotonic() + cooldown
         return None
 
     @classmethod
