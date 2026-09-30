@@ -80,6 +80,12 @@ services:
         value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}]'
       - key: AGENT_RATE_LIMIT
         value: "10/minute"
+      # Amazon Bedrock (Nova) provider. Paste the Bedrock API key in the Render dashboard;
+      # never commit it. Leaving it unset keeps Bedrock dormant and Gemini answering.
+      - key: AWS_BEARER_TOKEN_BEDROCK
+        sync: false
+      - key: BEDROCK_REGION
+        value: "us-east-1"
       # Missions and sessions live in Redis (shared by both workers); without it a request can
       # land on a worker that never saw the mission.
       - key: UPSTASH_REDIS_REST_URL
