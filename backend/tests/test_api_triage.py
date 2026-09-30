@@ -273,6 +273,79 @@ async def test_bedrock_failure_falls_back_to_next_provider(monkeypatch):
     assert provider == "gemini:gemini-3.5-flash-lite"
 
 
+@pytest.mark.asyncio
+async def test_failing_provider_is_skipped_during_cooldown(monkeypatch):
+    """A provider that raised is not retried on every request while another can answer."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", True)
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER", None)
+    monkeypatch.setattr(app_settings, "LLM_MODEL", None)
+    monkeypatch.setattr(app_settings, "BEDROCK_AWS_PROFILE", "hackathon")
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER_COOLDOWN_SECONDS", 60.0)
+    calls = {"bedrock": 0}
+
+    async def boom(*args, **kwargs):
+        calls["bedrock"] += 1
+        raise RuntimeError("ValidationException")
+
+    async def gemini_ok(*args, **kwargs):
+        return '{"ok": true}'
+
+    monkeypatch.setattr(LLMTriageEngine, "_call_bedrock", boom)
+    monkeypatch.setattr(LLMTriageEngine, "_call_gemini", gemini_ok)
+    for _ in range(3):
+        _, provider = await LLMTriageEngine.query_llm_with_provenance("PROMPT")
+        assert provider.startswith("gemini:")
+    assert calls["bedrock"] == 1  # tried once, then skipped
+
+    LLMTriageEngine._cooldown_until.clear()  # window over: it gets another chance
+    await LLMTriageEngine.query_llm_with_provenance("PROMPT")
+    assert calls["bedrock"] == 2
+
+
+@pytest.mark.asyncio
+async def test_only_provider_is_never_skipped(monkeypatch):
+    """With nothing else to fall back on, a cooled-down provider is still attempted."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", True)
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER", "bedrock")
+    monkeypatch.setattr(app_settings, "BEDROCK_AWS_PROFILE", "hackathon")
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER_COOLDOWN_SECONDS", 60.0)
+    calls = {"n": 0}
+
+    async def boom(*args, **kwargs):
+        calls["n"] += 1
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(LLMTriageEngine, "_call_bedrock", boom)
+    await LLMTriageEngine.query_llm_with_provenance("PROMPT")
+    await LLMTriageEngine.query_llm_with_provenance("PROMPT")
+    assert calls["n"] == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"candidates": [{"finishReason": "SAFETY"}]},                    # blocked: no content at all
+    {"candidates": [{"content": {"role": "model"}, "finishReason": "MAX_TOKENS"}]},  # no parts
+    {"candidates": []},
+    {"promptFeedback": {"blockReason": "OTHER"}},
+])
+async def test_gemini_reply_without_text_is_a_miss_not_a_crash(monkeypatch, body):
+    """A 200 from Gemini with no text must yield None so the chain can fall through."""
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
+
+    class FakeClient:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): ...
+        async def post(self, *a, **k):
+            return httpx.Response(200, json=body, request=httpx.Request("POST", "http://x"))
+
+    monkeypatch.setattr(llm_engine.httpx, "AsyncClient", FakeClient)
+    assert await LLMTriageEngine._call_gemini("m", "SYS", "PROMPT", 0.2) is None
+
+
 def test_coerce_json_tolerates_fences_and_prose():
     """Model output wrapped in ```json fences or prose is still parsed."""
     assert LLMTriageEngine._coerce_json('```json\n{"a": 1}\n```') == {"a": 1}

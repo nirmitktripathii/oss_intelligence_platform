@@ -3,7 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Terminal, Bell, Zap, Command, Github, Network } from 'lucide-react';
+import { Terminal, Bell, Zap, Command, Github, Network, Radio } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { SkinSwitcher } from '@/components/theme/skin-switcher';
@@ -102,6 +102,18 @@ export function Header({ onOpenCommandMenu }: HeaderProps) {
               >
                 <Network className="h-3.5 w-3.5" />
                 Knowledge Graph
+              </Button>
+            </Link>
+            <Link href="/alexa">
+              <Button
+                variant={pathname === '/alexa' ? 'secondary' : 'ghost'}
+                size="sm"
+                className={`text-xs gap-1.5 ${
+                  pathname === '/alexa' ? 'text-primary font-bold bg-primary/10 border border-primary/30' : 'text-muted-foreground'
+                }`}
+              >
+                <Radio className="h-3.5 w-3.5" />
+                Alexa+
               </Button>
             </Link>
             <Link href="/pricing">

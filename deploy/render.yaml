@@ -73,6 +73,48 @@ services:
         sync: false
       - key: FRONTEND_URL
         value: "https://gitscout.vercel.app"
+      # Agent planner (Developer Mission Control). Dormant until this is set. The URL must be
+      # the gitscout-mcp service below; only read-only tools are auto-approved, everything
+      # else pauses for the user's confirmation.
+      - key: AGENT_MCP_SERVERS
+        value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}]'
+      - key: AGENT_RATE_LIMIT
+        value: "10/minute"
+      # Amazon Bedrock (Nova) provider. Paste the Bedrock API key in the Render dashboard;
+      # never commit it. Leaving it unset keeps Bedrock dormant and Gemini answering.
+      - key: AWS_BEARER_TOKEN_BEDROCK
+        sync: false
+      - key: BEDROCK_REGION
+        value: "us-east-1"
+      # Missions and sessions live in Redis (shared by both workers); without it a request can
+      # land on a worker that never saw the mission.
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+
+  # 1b. GitScout MCP server (Streamable HTTP) — the tool surface the agent planner and any
+  # other MCP client (Alexa+, Claude, Cursor) connect to. A thin read-only client over the
+  # REST API above; holds no secrets and no database access.
+  - type: web
+    name: gitscout-mcp
+    env: python
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: mcp_server
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    # MCP_HOST=0.0.0.0 matters: the SDK only enforces its localhost-only Host-header allowlist
+    # when bound to loopback, which would reject the public hostname.
+    startCommand: "MCP_PORT=$PORT python -m gitscout_mcp.server"
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: MCP_HOST
+        value: "0.0.0.0"
+      - key: GITSCOUT_API_BASE
+        value: "https://gitscout-api.onrender.com/api/v1"
 
   # 2. Background Scraper & AST Triage Worker
   - type: worker

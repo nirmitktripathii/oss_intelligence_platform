@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
     LLM_TIMEOUT_SECONDS: float = 30.0        # interactive triage synthesis call budget
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
+    # After a provider raises, skip it for this long (when another provider is available) so a
+    # broken one (expired key, zero quota) costs one slow call per window, not one per request.
+    LLM_PROVIDER_COOLDOWN_SECONDS: float = 120.0
 
     # Long issue descriptions: bodies up to this many characters are fed to the AI
     # verbatim. A longer body is condensed ONCE at index time by a single fast
@@ -124,6 +127,19 @@ class Settings(BaseSettings):
     LLM_CONTRIBUTING: bool = True             # summarize the repo's REAL CONTRIBUTING guide
     LLM_CONTRIBUTING_MAX_CHARS: int = 6000    # bound the guide text fed to the summarizer
     CONTRIBUTING_CACHE_TTL_SECONDS: int = 604800  # cache a repo's CONTRIBUTING guide for 7 days
+
+    # ── Agent planner (Developer Mission Control) ──
+    # The planner reasons through the LLM chain above and acts only through MCP servers.
+    # Unset => the /agent endpoints answer 503 and nothing else changes. JSON list, e.g.
+    #   [{"name": "gitscout", "url": "http://127.0.0.1:9000/mcp",
+    #     "auto_approve": ["search_issues", "get_issue", "analyze_issue"]}]
+    # A tool NOT listed in its server's auto_approve pauses for the user's confirmation,
+    # so list only read-only tools there.
+    AGENT_MCP_SERVERS: Optional[str] = None
+    AGENT_MAX_STEPS: int = 6                  # tool calls per mission before it must answer
+    AGENT_TOOL_TIMEOUT_SECONDS: float = 90.0  # per MCP call; triage tools may invoke an LLM
+    AGENT_MISSION_TTL_SECONDS: int = 86400    # how long a mission (and its session) is kept
+    AGENT_RATE_LIMIT: str = "10/minute"       # per client, on starting and approving missions
 
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None

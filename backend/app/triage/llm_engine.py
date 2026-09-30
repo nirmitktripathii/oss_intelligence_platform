@@ -8,6 +8,7 @@ code diff synthesis, and standalone bug reproduction generation.
 import asyncio
 import json
 import logging
+import time
 from functools import lru_cache
 from typing import Any, Dict, List, Optional
 import httpx
@@ -224,6 +225,9 @@ class LLMTriageEngine:
     deterministic result rather than fabricating one.
     """
 
+    # provider -> time.monotonic() until which it is skipped after a failure (per process).
+    _cooldown_until: Dict[str, float] = {}
+
     # Default model per provider (all reachable on a free tier). Override with LLM_MODEL.
     # Gemini/Gemma default to the free-tier flash-lite; other free Gemma options via the
     # same Gemini API: gemini-3.1-flash-lite, gemma-4-26b-a4b-it, gemma-4-31b-it. Groq's
@@ -382,7 +386,15 @@ class LLMTriageEngine:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                candidate = (data.get("candidates") or [{}])[0]
+                parts = (candidate.get("content") or {}).get("parts") or []
+                text = next((p["text"] for p in parts if isinstance(p, dict) and p.get("text")), None)
+                if text:
+                    return text
+                # A 200 with no text (blocked, truncated, or an empty candidate) is a provider
+                # miss, not a crash: fall through to the next provider.
+                logger.warning("[LLM] gemini returned no text (finishReason=%s)", candidate.get("finishReason"))
+                return None
             # Body carries the real reason (bad model, quota, auth) — truncate to stay log-safe.
             logger.warning("[LLM] gemini returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None
@@ -462,7 +474,12 @@ class LLMTriageEngine:
         ``timeout`` overrides LLM_TIMEOUT_SECONDS for this call (used by the lenient
         background summarizer).
         """
-        for provider, model in cls.resolve_chain():
+        chain = cls.resolve_chain()
+        cooldown = float(getattr(settings, "LLM_PROVIDER_COOLDOWN_SECONDS", 0) or 0)
+        for position, (provider, model) in enumerate(chain):
+            # Skip a provider that just failed, unless it is the last one left to try.
+            if cooldown > 0 and position < len(chain) - 1 and time.monotonic() < cls._cooldown_until.get(provider, 0.0):
+                continue
             try:
                 if provider == "bedrock":
                     text = await cls._call_bedrock(model, system_prompt, prompt, temperature, timeout)
@@ -480,6 +497,8 @@ class LLMTriageEngine:
                 # %r so transport errors with an empty str() (httpx ReadTimeout/ConnectTimeout,
                 # which render as "") still name their type — otherwise prod is undiagnosable.
                 logger.warning("[LLM] %s invocation failed: %r", provider, exc)
+                if cooldown > 0:
+                    cls._cooldown_until[provider] = time.monotonic() + cooldown
         return None
 
     @classmethod
