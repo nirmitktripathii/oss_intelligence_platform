@@ -96,9 +96,63 @@ for the Open Source mini-challenge.
 
 ---
 
+## 2026-09-30 (agent planner)
+
+### Added
+- **Agent planner** in `backend/app/agent/` — turns one spoken request into a sequence of MCP
+  tool calls and a short spoken answer. Endpoints under `/api/v1/agent`: `GET /tools`,
+  `POST /missions`, `GET /missions/{id}`, `POST /missions/{id}/approval`.
+  - **Provider-neutral.** Every decision goes through the existing LLM chain (Bedrock → Gemini →
+    Groq → OpenAI → Ollama), one JSON decision per turn, with no provider-specific tool-calling
+    API. Switching providers needs no planner change.
+  - **Tools come only from MCP servers** over Streamable HTTP (`AGENT_MCP_SERVERS`), the same
+    surface Alexa+ uses. Adding a server is configuration, not code.
+  - **Approval gates, default-deny.** A tool runs unattended only if the operator listed it in
+    that server's `auto_approve`; anything else pauses the mission (`awaiting_approval`) and,
+    once approved, runs with exactly the arguments the user was shown. A server's own
+    annotations are not trusted for this decision.
+  - **Session memory.** Missions sharing a `session_id` see the last three turns, so "how would
+    I fix the first one?" resolves without another search.
+  - **Untrusted tool output.** Results are JSON-encoded and fenced as data in the prompt; the
+    approval gate, not the prompt, is what stops injected text from causing a side effect.
+  - Bounded: `AGENT_MAX_STEPS` tool calls per mission (default 6), recovery from up to two
+    unusable model replies, no identical repeat calls, and a per-client rate limit
+    (`AGENT_RATE_LIMIT`, default 10/minute) on starting and approving missions.
+  - **Dormant unless configured**: with `AGENT_MCP_SERVERS` unset the endpoints answer 503 and
+    nothing else changes.
+- `mcp>=2.2.0,<3` dependency in the backend (MCP client).
+- Tests: `backend/tests/test_agent_planner.py` (24) covering the decision loop, approval and
+  rejection, replay protection, memory isolation between sessions, fence escaping, server-config
+  validation, the HTTP API, and the MCP client against an in-process MCP server.
+
+### Verified
+- Backend suite: **108 passed**.
+- Live, end to end, on a developer machine: planner → local GitScout MCP server (Streamable
+  HTTP) → hosted GitScout API, reasoning on `gemini:gemini-3.5-flash-lite`.
+  - "Find me a beginner-friendly Python issue and explain what's wrong in it" → `search_issues`
+    then `analyze_issue`, spoken answer plus a markdown card.
+  - Follow-up "how would I fix the first one?" → answered from session memory, no tool calls.
+  - With `analyze_issue` left out of `auto_approve`: the mission paused, ran the tool only after
+    approval, then completed.
+
+### Not yet verified / known limits
+- **Not deployed.** The hosted backend does not run the planner yet; it needs the GitScout MCP
+  server hosted alongside it.
+- **Not yet run on Amazon Nova** (Bedrock quota restriction above). The planner is unchanged
+  either way; only the provenance label will differ.
+- **No caller authentication** on the mission and approval endpoints: a mission id is an
+  unguessable token, but anyone holding it can approve. This must be closed before a
+  side-effecting tool (Git/CI, email) is connected.
+- **Latency.** Missions run synchronously; the first live mission took about a minute (mostly
+  the hosted triage call), which is too slow for voice without progress updates.
+
+---
+
 ## Planned (tracked on the battle-plan board)
 - Enable the Bedrock provider on the hosted backend (set `AWS_BEARER_TOKEN_BEDROCK` on Render)
   once the account quota restriction is lifted, and record the first live Nova triage here.
+- Deploy the agent planner: host the GitScout MCP server next to the backend, add caller
+  authentication to the mission endpoints, and stream mission progress.
 - **Git/CI MCP** (branch · patch · run tests · CI status · draft PR) against one ephemeral
   demo sandbox.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an

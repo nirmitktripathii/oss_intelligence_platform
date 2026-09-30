@@ -7,6 +7,7 @@ from app.api.v1.triage import router as triage_router
 from app.api.v1.bounties import router as bounties_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.billing import router as billing_router
+from app.api.v1.agent import router as agent_router
 
 api_router = APIRouter()
 
@@ -16,3 +17,4 @@ api_router.include_router(triage_router)
 api_router.include_router(bounties_router)
 api_router.include_router(notifications_router)
 api_router.include_router(billing_router)
+api_router.include_router(agent_router)
