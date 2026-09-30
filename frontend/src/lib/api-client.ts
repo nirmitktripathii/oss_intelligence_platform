@@ -9,7 +9,7 @@ import {
 import { CheckoutRequest, CheckoutResponse, SubscriptionStatus } from '@/types/billing';
 import { SAMPLE_FALLBACK_ISSUES } from './constants';
 
-function resolveApiBase(rawUrl?: string): string {
+export function resolveApiBase(rawUrl?: string): string {
   let url = (rawUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').trim();
   url = url.replace(/\/+$/, '');
   if (!url.endsWith('/api/v1')) {
@@ -18,7 +18,7 @@ function resolveApiBase(rawUrl?: string): string {
   return url;
 }
 
-const API_BASE = resolveApiBase();
+export const API_BASE = resolveApiBase();
 
 /**
  * Frontend filter ids -> backend query contract.

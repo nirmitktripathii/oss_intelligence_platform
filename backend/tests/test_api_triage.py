@@ -273,6 +273,28 @@ async def test_bedrock_failure_falls_back_to_next_provider(monkeypatch):
     assert provider == "gemini:gemini-3.5-flash-lite"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"candidates": [{"finishReason": "SAFETY"}]},                    # blocked: no content at all
+    {"candidates": [{"content": {"role": "model"}, "finishReason": "MAX_TOKENS"}]},  # no parts
+    {"candidates": []},
+    {"promptFeedback": {"blockReason": "OTHER"}},
+])
+async def test_gemini_reply_without_text_is_a_miss_not_a_crash(monkeypatch, body):
+    """A 200 from Gemini with no text must yield None so the chain can fall through."""
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
+
+    class FakeClient:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): ...
+        async def post(self, *a, **k):
+            return httpx.Response(200, json=body, request=httpx.Request("POST", "http://x"))
+
+    monkeypatch.setattr(llm_engine.httpx, "AsyncClient", FakeClient)
+    assert await LLMTriageEngine._call_gemini("m", "SYS", "PROMPT", 0.2) is None
+
+
 def test_coerce_json_tolerates_fences_and_prose():
     """Model output wrapped in ```json fences or prose is still parsed."""
     assert LLMTriageEngine._coerce_json('```json\n{"a": 1}\n```') == {"a": 1}

@@ -382,7 +382,15 @@ class LLMTriageEngine:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                candidate = (data.get("candidates") or [{}])[0]
+                parts = (candidate.get("content") or {}).get("parts") or []
+                text = next((p["text"] for p in parts if isinstance(p, dict) and p.get("text")), None)
+                if text:
+                    return text
+                # A 200 with no text (blocked, truncated, or an empty candidate) is a provider
+                # miss, not a crash: fall through to the next provider.
+                logger.warning("[LLM] gemini returned no text (finishReason=%s)", candidate.get("finishReason"))
+                return None
             # Body carries the real reason (bad model, quota, auth) — truncate to stay log-safe.
             logger.warning("[LLM] gemini returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None

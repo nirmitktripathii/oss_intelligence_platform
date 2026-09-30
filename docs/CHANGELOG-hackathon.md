@@ -167,6 +167,45 @@ for the Open Source mini-challenge.
 
 ---
 
+## 2026-10-01 (simulated Alexa+ web client)
+
+### Added
+- **`/alexa` page in `frontend/`** — the simulated Alexa+ client for Developer Mission Control.
+  It talks to the agent planner's streaming endpoints and shows what an Alexa+ device would:
+  - **Voice in and out.** Browser speech recognition (mic button) and speech synthesis read the
+    assistant's `speech` aloud. Both are feature-detected; typing works in every browser, and
+    the page says so when voice is unavailable.
+  - **Live step timeline.** Each tool the planner picks appears as it happens (queued, running,
+    done, failed, needs your OK, declined), with its reasoning and arguments.
+  - **Approval card.** A gated tool shows its exact arguments with Approve / Decline buttons; with
+    the mic on, saying "yes" or "no" answers it. The approved call runs with those arguments.
+  - **"On screen" panel.** The longer `display` answer (links, code) is rendered by a small
+    markdown renderer that builds React elements only (no HTML injection from model output;
+    links limited to http/https).
+  - **Conversation memory.** Follow-ups reuse the session; the session token is a bearer secret
+    and is kept in memory only (never storage or a URL), so a reload starts a new conversation.
+  - Honest failure states: agent not enabled (503), rate limited (429), network loss, stop button.
+- **Nav link** "Alexa+" in the header.
+
+### Fixed
+- A Gemini reply with HTTP 200 but no text (blocked or truncated candidate) crashed the provider
+  with `KeyError('parts')` and failed the mission. It is now a provider miss, so the chain
+  falls through. Regression test added (4 response shapes).
+
+### Verified
+- `tsc`, `next lint` (no new warnings) and `next build` pass; `/alexa` is 117 kB first load.
+- Live in the browser against a local stack (GitScout MCP server + backend + Gemini): a spoken-style
+  request ran `search_issues` and `get_issue` unattended, paused on `analyze_issue` for approval,
+  and after Approve finished with a spoken answer and a markdown card on screen. The layout holds
+  at phone width. Backend triage tests: 20 passed.
+
+### Not verified
+- **Microphone input and spoken replies were not exercised** (the test browser has no speech
+  recognition); the typed path is what was run.
+- Not deployed: Vercel needs the backend to have the agent enabled (see the known limits above).
+
+---
+
 ## Planned (tracked on the battle-plan board)
 - Enable the Bedrock provider on the hosted backend (set `AWS_BEARER_TOKEN_BEDROCK` on Render)
   once the account quota restriction is lifted, and record the first live Nova triage here.
@@ -177,4 +216,4 @@ for the Open Source mini-challenge.
   demo sandbox.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an
   agent action for report delivery.
-- **Simulated Alexa+ web client** (in `frontend/`) — conversational orchestrator + terminal/diff panel.
+- Terminal/diff panel in the Alexa+ client (arrives with the Git/CI MCP).
