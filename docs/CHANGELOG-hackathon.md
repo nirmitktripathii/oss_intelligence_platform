@@ -58,10 +58,47 @@ for the Open Source mini-challenge.
 
 ---
 
+## 2026-09-30
+
+### Added
+- **Amazon Bedrock provider** in `backend/app/triage/llm_engine.py` — a fifth LLM provider
+  *alongside* Gemini / Groq / OpenAI-compatible / Ollama, using the Bedrock **Converse API**
+  through `boto3` (run off the event loop, bounded by the same timeout budget as the other
+  providers). Default model: **Amazon Nova 2 Lite** via the US cross-region inference profile
+  `us.amazon.nova-2-lite-v1:0`.
+  - **Dormant unless configured.** Enabled only by an explicit credential: a Bedrock API key in
+    `AWS_BEARER_TOKEN_BEDROCK` (deploys) or a named CLI profile in `BEDROCK_AWS_PROFILE` (local
+    dev). Ambient AWS credentials never route traffic here by accident.
+  - **Leads the auto chain, degrades gracefully.** Order is Bedrock → Gemini → Groq → OpenAI →
+    Ollama; any Bedrock error falls through to the next provider, then to AST-only triage.
+  - **Own model override** (`BEDROCK_MODEL_ID`): the shared `LLM_MODEL` is not applied to
+    Bedrock, since a Gemini/Groq model id is invalid there.
+  - `maxTokens` is always sent (`BEDROCK_MAX_TOKENS`, default 4096) and non-text content blocks
+    (e.g. reasoning) are dropped from the returned text.
+- `boto3[crt]>=1.39.0` dependency (1.39 is the first line that reads Bedrock API keys; `crt` is
+  needed for `aws login` credentials in local dev).
+- Tests: provider-chain ordering, API-key-only enablement, Converse request shape, and
+  Bedrock-failure fallback. A suite-wide fixture keeps tests off real Bedrock even when a
+  developer `.env` enables it.
+
+### Verified
+- Backend suite: **84 passed**.
+- Request path exercised against the real Bedrock endpoint in `us-east-1`: authentication and
+  request signing succeed and the call reaches the Converse operation.
+
+### Not yet verified
+- **No live model response yet.** The AWS account's Bedrock inference quotas are currently
+  applied at `0` (new-account restriction), so Converse returns
+  `ValidationException: Operation not allowed` and the engine falls back as designed. An AWS
+  Support case is open. The hosted backend therefore still answers with Gemini, and the
+  **AWS Builder mini-challenge is not claimed** until a triage response carries
+  `bedrock:us.amazon.nova-2-lite-v1:0` provenance.
+
+---
+
 ## Planned (tracked on the battle-plan board)
-- Add an **Amazon Bedrock** provider *alongside* the current Gemini provider for
-  triage/fix-plan/mission reasoning in `backend/app/triage/llm_engine.py` — an AWS-native,
-  source-grounded path (AWS Builder mini-challenge hook).
+- Enable the Bedrock provider on the hosted backend (set `AWS_BEARER_TOKEN_BEDROCK` on Render)
+  once the account quota restriction is lifted, and record the first live Nova triage here.
 - **Git/CI MCP** (branch · patch · run tests · CI status · draft PR) against one ephemeral
   demo sandbox.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an

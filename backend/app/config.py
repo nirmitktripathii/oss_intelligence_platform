@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     # Providers are free-tier friendly: Google Gemini / Gemma, Groq, any
     # OpenAI-compatible endpoint, or a local Ollama for development only.
     LLM_TRIAGE_ENABLED: bool = True          # master switch; False => always AST-only
-    LLM_PROVIDER: Optional[str] = None       # force one of: gemini|groq|openai|ollama (else auto)
+    LLM_PROVIDER: Optional[str] = None       # force one of: bedrock|gemini|groq|openai|ollama (else auto)
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
     LLM_TIMEOUT_SECONDS: float = 30.0        # interactive triage synthesis call budget
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
@@ -92,6 +92,22 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = None      # OpenAI or any compatible endpoint
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OLLAMA_BASE_URL: Optional[str] = None     # e.g. http://localhost:11434 — local dev only, never on Render
+
+    # Amazon Bedrock (AWS-native provider, Converse API). Enabled by EITHER credential:
+    #   - AWS_BEARER_TOKEN_BEDROCK: a Bedrock API key (deploys, e.g. Render). boto3 reads it
+    #     straight from the environment — the app never passes the key around itself.
+    #   - BEDROCK_AWS_PROFILE: a named AWS CLI profile (local dev, e.g. after `aws login`).
+    # Model ids are account/region specific: list them with
+    #   aws bedrock list-inference-profiles --region us-east-1
+    # BEDROCK_MODEL_ID is Bedrock's own override; the shared LLM_MODEL is deliberately NOT
+    # applied here, because a Gemini/Groq model id set for the fallbacks is invalid on Bedrock.
+    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
+    BEDROCK_AWS_PROFILE: Optional[str] = None
+    BEDROCK_REGION: str = "us-east-1"
+    BEDROCK_MODEL_ID: Optional[str] = None     # default: us.amazon.nova-2-lite-v1:0
+    # Always sent explicitly: an unset maxTokens makes Bedrock reserve the model's full output
+    # quota per call, which surfaces as spurious ThrottlingException under load.
+    BEDROCK_MAX_TOKENS: int = 4096
 
     # Real-code grounding: fetch the localized file's actual source (GitHub Contents API,
     # reuses GITHUB_TOKEN) and feed it to the LLM so diagnoses are grounded, not guessed.

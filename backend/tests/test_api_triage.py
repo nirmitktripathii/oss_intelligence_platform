@@ -7,9 +7,13 @@ import httpx
 
 from app.config import settings as app_settings
 from app.scrapers.github_client import GitHubClient
+from app.triage import llm_engine
 from app.triage.llm_engine import LLMTriageEngine
 
-_LLM_KEYS = ("GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "OLLAMA_BASE_URL")
+_LLM_KEYS = (
+    "AWS_BEARER_TOKEN_BEDROCK", "BEDROCK_AWS_PROFILE",
+    "GEMINI_API_KEY", "GROQ_API_KEY", "OPENAI_API_KEY", "OLLAMA_BASE_URL",
+)
 
 
 def _force_ast_only(monkeypatch):
@@ -187,6 +191,86 @@ def test_resolve_chain_master_switch_off(monkeypatch):
     monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
     monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", False)
     assert LLMTriageEngine.resolve_chain() == []
+
+
+# ── Amazon Bedrock provider ─────────────────────────────────────────────────── #
+
+
+def test_resolve_chain_bedrock_leads_with_its_own_model(monkeypatch):
+    """Bedrock goes first when configured, and a shared LLM_MODEL never leaks into it."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", True)
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER", None)
+    monkeypatch.setattr(app_settings, "BEDROCK_MODEL_ID", None)
+    monkeypatch.setattr(app_settings, "LLM_MODEL", "gemini-3.5-flash-lite")
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
+    monkeypatch.setattr(app_settings, "BEDROCK_AWS_PROFILE", "hackathon")
+
+    chain = LLMTriageEngine.resolve_chain()
+    assert chain[0] == ("bedrock", "us.amazon.nova-2-lite-v1:0")
+    assert chain[1] == ("gemini", "gemini-3.5-flash-lite")
+
+    monkeypatch.setattr(app_settings, "BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")
+    assert LLMTriageEngine.resolve_chain()[0] == ("bedrock", "us.amazon.nova-pro-v1:0")
+
+
+def test_bedrock_enabled_by_api_key_alone(monkeypatch):
+    """A Bedrock API key (no profile) is enough to enable the provider, as on Render."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", True)
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER", None)
+    monkeypatch.setattr(app_settings, "AWS_BEARER_TOKEN_BEDROCK", "x")
+    assert LLMTriageEngine.resolve_chain()[0][0] == "bedrock"
+
+
+@pytest.mark.asyncio
+async def test_call_bedrock_sends_max_tokens_and_returns_text_only(monkeypatch):
+    """Converse gets an explicit maxTokens + system prompt; non-text blocks are dropped."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "BEDROCK_AWS_PROFILE", "hackathon")
+    monkeypatch.setattr(app_settings, "BEDROCK_MAX_TOKENS", 1234)
+    captured = {}
+
+    class FakeClient:
+        def converse(self, **kwargs):
+            captured.update(kwargs)
+            return {
+                "stopReason": "end_turn",
+                "output": {"message": {"content": [
+                    {"reasoningContent": {"reasoningText": {"text": "thinking..."}}},
+                    {"text": '{"ok": true}'},
+                ]}},
+            }
+
+    monkeypatch.setattr(llm_engine, "_bedrock_client", lambda *a, **k: FakeClient())
+    text = await LLMTriageEngine._call_bedrock("us.amazon.nova-2-lite-v1:0", "SYS", "PROMPT", 0.2)
+
+    assert text == '{"ok": true}'
+    assert captured["modelId"] == "us.amazon.nova-2-lite-v1:0"
+    assert captured["system"] == [{"text": "SYS"}]
+    assert captured["inferenceConfig"] == {"maxTokens": 1234, "temperature": 0.2}
+
+
+@pytest.mark.asyncio
+async def test_bedrock_failure_falls_back_to_next_provider(monkeypatch):
+    """A Bedrock error (e.g. AccessDenied) degrades to the next provider, never raises."""
+    _force_ast_only(monkeypatch)
+    monkeypatch.setattr(app_settings, "LLM_TRIAGE_ENABLED", True)
+    monkeypatch.setattr(app_settings, "LLM_PROVIDER", None)
+    monkeypatch.setattr(app_settings, "LLM_MODEL", None)
+    monkeypatch.setattr(app_settings, "BEDROCK_AWS_PROFILE", "hackathon")
+    monkeypatch.setattr(app_settings, "GEMINI_API_KEY", "x")
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("AccessDeniedException")
+
+    async def gemini_ok(*args, **kwargs):
+        return '{"ok": true}'
+
+    monkeypatch.setattr(LLMTriageEngine, "_call_bedrock", boom)
+    monkeypatch.setattr(LLMTriageEngine, "_call_gemini", gemini_ok)
+    text, provider = await LLMTriageEngine.query_llm_with_provenance("PROMPT")
+    assert provider == "gemini:gemini-3.5-flash-lite"
 
 
 def test_coerce_json_tolerates_fences_and_prose():

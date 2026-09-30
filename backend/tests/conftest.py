@@ -82,6 +82,20 @@ def hermetic_cache(monkeypatch):
     return store
 
 
+@pytest.fixture(autouse=True)
+def no_real_bedrock(monkeypatch):
+    """Keep the suite off real Amazon Bedrock by default.
+
+    A developer's ``.env`` may set BEDROCK_AWS_PROFILE (or a Bedrock API key) for local
+    runs; since Bedrock leads the provider chain, un-mocked tests would otherwise make
+    real, billed Converse calls. Tests that exercise Bedrock set these explicitly.
+    """
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "BEDROCK_AWS_PROFILE", None)
+    monkeypatch.setattr(settings, "AWS_BEARER_TOKEN_BEDROCK", None)
+
+
 @pytest_asyncio.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Create a clean database session for each test function."""
