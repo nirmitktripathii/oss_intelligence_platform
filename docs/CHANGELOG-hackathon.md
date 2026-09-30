@@ -222,3 +222,10 @@ for the Open Source mini-challenge.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an
   agent action for report delivery.
 - Terminal/diff panel in the Alexa+ client (arrives with the Git/CI MCP).
+
+## 2026-10-01 (Git/CI MCP)
+
+- New `git_ci_mcp/` server (Streamable HTTP, port 9100): `sandbox_clone`, `create_branch`, `apply_patch`, `show_diff`, `run_tests`, `commit_changes`, `ci_status`, `draft_pr`, `sandbox_status`, `destroy_sandbox`.
+- Guardrails: GitHub https URLs only, owner allow-list (default-deny), sandbox count and TTL limits, patch path validation (no absolute, `..` or `.git` paths), exact-match test-command allow-list with no shell and a scrubbed environment, hooks disabled, token passed as an HTTP header and never stored, base branch never pushed, PRs always drafts.
+- Verified: 14 offline tests including a full local clone, branch, patch, commit flow. Not verified: a real push and draft PR (needs `GITHUB_TOKEN`).
+- Deliberately not in `deploy/render.yaml`: it executes a repo's tests, so it runs locally for the demo.
