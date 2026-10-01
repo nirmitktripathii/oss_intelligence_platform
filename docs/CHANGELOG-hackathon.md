@@ -229,3 +229,12 @@ for the Open Source mini-challenge.
 - Guardrails: GitHub https URLs only, owner allow-list (default-deny), sandbox count and TTL limits, patch path validation (no absolute, `..` or `.git` paths), exact-match test-command allow-list with no shell and a scrubbed environment, hooks disabled, token passed as an HTTP header and never stored, base branch never pushed, PRs always drafts.
 - Verified: 14 offline tests including a full local clone, branch, patch, commit flow. Not verified: a real push and draft PR (needs `GITHUB_TOKEN`).
 - Deliberately not in `deploy/render.yaml`: it executes a repo's tests, so it runs locally for the demo.
+
+## 2026-10-01 (Git/CI approval-gate demo, verified end to end)
+
+- Git/CI MCP gained `list_files` and `read_file` (read-only, path-confined, size-capped) and `edit_file` (replace one exact piece of text; more reliable for a model than a hand-written diff). `apply_patch` now uses `git apply --recount` and returns a hint on failure.
+- Fixed: git subprocesses ran in text mode, which turned a patch's newlines into CRLF on Windows so patches never applied. They now run on bytes. Clones use `core.autocrlf=false`.
+- New `demo/`: `sandbox-repo/` (a small package with a real bug, failing tests and a CI workflow, published as `nirmitktripathii/gitscout-demo-sandbox`) and `start-demo.ps1` (starts both MCP servers, the backend with a 14-step budget, and the frontend). Walkthrough in `docs/DEMO-approval-gate.md`.
+- Verified live: one request through the real planner, GitScout MCP and Git/CI MCP produced clone, read, branch, edit, test, commit and draft PR #1 in the demo repo, with GitHub Actions green. Seven writes paused for approval; the test harness answered them. The model was Gemini (Nova quota is still 0).
+- Tests: 16 Git/CI tests pass (new: exact-text edit, wrong-count patch, path confinement on the read tools).
+- Still not deployed: the Git/CI server runs locally until per-user sign-in exists.

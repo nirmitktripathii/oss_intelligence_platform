@@ -19,7 +19,7 @@ from .sandbox import GitCiError, SandboxManager
 mcp = MCPServer(
     "GitCI",
     instructions=(
-        "Turn a triaged issue into a reviewed change. Flow: sandbox_clone, create_branch, apply_patch, "
+        "Turn a triaged issue into a reviewed change. Flow: sandbox_clone, list_files/read_file, create_branch, edit_file (exact old/new text, preferred) or apply_patch (a unified diff), "
         "run_tests, show_diff, commit_changes, draft_pr, then ci_status. Only allow-listed repos work. "
         "Pull requests are always drafts and the base branch is never pushed. Ask the user before every "
         "step that writes (clone, patch, tests, commit, PR)."
@@ -51,6 +51,18 @@ async def sandbox_status(sandbox_id: str) -> dict:
 
 
 @mcp.tool()
+async def list_files(sandbox_id: str) -> dict:
+    """List the tracked files in the sandbox (read-only)."""
+    return await _guard(_sandboxes.list_files(sandbox_id))
+
+
+@mcp.tool()
+async def read_file(sandbox_id: str, path: str) -> dict:
+    """Read one text file from the sandbox by repo-relative path (read-only, size-capped). Read a file before writing a patch for it."""
+    return await _guard(_sandboxes.read_file(sandbox_id, path))
+
+
+@mcp.tool()
 async def create_branch(sandbox_id: str, name: str) -> dict:
     """Create and switch to a new feature branch in the sandbox."""
     return await _guard(_sandboxes.create_branch(sandbox_id, name))
@@ -63,6 +75,12 @@ async def apply_patch(sandbox_id: str, diff: str) -> dict:
 
 
 @mcp.tool()
+async def edit_file(sandbox_id: str, path: str, old: str, new: str) -> dict:
+    """Replace one exact piece of text in a sandbox file. Prefer this over apply_patch for small fixes: copy 'old' exactly from read_file (it must match once), and put the replacement in 'new'."""
+    return await _guard(_sandboxes.edit_file(sandbox_id, path, old, new))
+
+
+@mcp.tool()
 async def show_diff(sandbox_id: str) -> dict:
     """Show the sandbox's current changes against HEAD (size-capped)."""
     return await _guard(_sandboxes.diff(sandbox_id))
@@ -70,7 +88,7 @@ async def show_diff(sandbox_id: str) -> dict:
 
 @mcp.tool()
 async def run_tests(sandbox_id: str, command: str = "pytest -q") -> dict:
-    """Run an allow-listed test command in the sandbox (no shell, time limit, output tail)."""
+    """Run an allow-listed test command in the sandbox (no shell, time limit, output tail). Allowed commands: 'pytest -q', 'python -m pytest -q', 'npm test', 'go test ./...' (exact text)."""
     return await _guard(_sandboxes.run_tests(sandbox_id, command))
 
 

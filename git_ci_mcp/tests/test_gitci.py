@@ -89,3 +89,90 @@ def test_full_local_flow(tmp_path):
             await mgr.status(sid)
 
     asyncio.run(flow())
+
+
+def test_read_only_file_tools_and_path_confinement(tmp_path):
+    demo = Path(__file__).resolve().parents[2] / "demo" / "sandbox-repo"
+    origin = tmp_path / "origin"
+    import shutil
+
+    shutil.copytree(demo, origin)
+    _git(origin, "init", "-b", "main")
+    _git(origin, "add", ".")
+    _git(origin, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init")
+
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path / "sb")
+    cfg.allowed_owners = ["o"]
+    cfg.test_commands = ["python -m pytest -q"]
+    mgr = SandboxManager(cfg)
+
+    async def flow():
+        sid = (await mgr.create("https://github.com/o/r", source=str(origin)))["sandbox_id"]
+        assert "textkit/slug.py" in (await mgr.list_files(sid))["files"]
+        assert "def slugify" in (await mgr.read_file(sid, "textkit/slug.py"))["content"]
+        for bad in ("../origin/README.md", "/etc/passwd", ".git/config", "missing.py"):
+            with pytest.raises(GitCiError):
+                await mgr.read_file(sid, bad)
+
+        before = await mgr.run_tests(sid, "python -m pytest -q")
+        assert before["passed"] is False  # the demo bug is real
+
+        fix = (
+            "--- a/textkit/slug.py\n+++ b/textkit/slug.py\n@@ -1,8 +1,8 @@\n"
+            ' """Turn a title into a URL-safe slug."""\n \n import re\n \n \n'
+            ' def slugify(text: str) -> str:\n'
+            '     """Lower-case the text and join its words with single hyphens."""\n'
+            '-    return re.sub(r"\\s+", "-", text.strip().lower())\n'
+            '+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")\n'
+        )
+        await mgr.create_branch(sid, "fix/slugify")
+        await mgr.apply_patch(sid, fix)
+        after = await mgr.run_tests(sid, "python -m pytest -q")
+        assert after["passed"] is True, after["output_tail"]
+
+    asyncio.run(flow())
+
+
+def test_edit_file_exact_match_and_recount_patch(tmp_path):
+    import shutil
+
+    demo = Path(__file__).resolve().parents[2] / "demo" / "sandbox-repo"
+    origin = tmp_path / "origin"
+    shutil.copytree(demo, origin)
+    _git(origin, "init", "-b", "main")
+    _git(origin, "add", ".")
+    _git(origin, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init")
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path / "sb")
+    cfg.allowed_owners = ["o"]
+    cfg.test_commands = ["python -m pytest -q"]
+    mgr = SandboxManager(cfg)
+
+    async def flow():
+        sid = (await mgr.create("https://github.com/o/r", source=str(origin)))["sandbox_id"]
+        with pytest.raises(GitCiError):
+            await mgr.edit_file(sid, "textkit/slug.py", "no such text", "x")
+        with pytest.raises(GitCiError):
+            await mgr.edit_file(sid, "../x", "a", "b")
+        await mgr.edit_file(
+            sid, "textkit/slug.py",
+            'return re.sub(r"\\s+", "-", text.strip().lower())',
+            'return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")',
+        )
+        assert (await mgr.run_tests(sid, "python -m pytest -q"))["passed"] is True
+        await mgr.destroy(sid)
+
+        # A hunk header with the wrong counts (what the model produced) is accepted thanks to --recount.
+        sid = (await mgr.create("https://github.com/o/r", source=str(origin)))["sandbox_id"]
+        bad_counts = (
+            "--- a/textkit/slug.py\n+++ b/textkit/slug.py\n@@ -6,2 +6,3 @@\n"
+            " def slugify(text: str) -> str:\n"
+            '     """Lower-case the text and join its words with single hyphens."""\n'
+            '-    return re.sub(r"\\s+", "-", text.strip().lower())\n'
+            '+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")\n'
+        )
+        await mgr.apply_patch(sid, bad_counts)
+        assert (await mgr.run_tests(sid, "python -m pytest -q"))["passed"] is True
+
+    asyncio.run(flow())
