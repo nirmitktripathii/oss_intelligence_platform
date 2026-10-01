@@ -85,6 +85,9 @@ services:
       # A mission that fixes a bug takes about a dozen tool calls.
       - key: AGENT_MAX_STEPS
         value: "14"
+      # Lets "fix the bug in the demo sandbox" resolve to a clone URL.
+      - key: AGENT_DEFAULT_REPO
+        value: "nirmitktripathii/gitscout-demo-sandbox"
       - key: AGENT_RATE_LIMIT
         value: "10/minute"
       # Sign-in (GitHub OAuth). Tools that change things need a signed-in user on the allow-list;

@@ -140,6 +140,9 @@ class Settings(BaseSettings):
     AGENT_TOOL_TIMEOUT_SECONDS: float = 90.0  # per MCP call; triage tools may invoke an LLM
     AGENT_MISSION_TTL_SECONDS: int = 86400    # how long a mission (and its session) is kept
     AGENT_RATE_LIMIT: str = "10/minute"       # per client, on starting and approving missions
+    # "owner/name" of the repo this deployment works on. Shown to the model so "the demo sandbox"
+    # resolves to a clone URL instead of a question back to the user.
+    AGENT_DEFAULT_REPO: Optional[str] = None
 
     # Sign-in for tools that change things (Git/CI, email). Anyone may use the read-only tools.
     # Create a GitHub OAuth App whose callback URL is AUTH_GITHUB_CALLBACK_URL

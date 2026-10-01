@@ -139,6 +139,13 @@ def build_prompt(mission: Mission, catalog: List[ToolSpec], history: List[Missio
             "If they ask for a change (edit, commit, pull request, email), say that signing in is needed first."
         )
 
+    default_repo = getattr(settings, "AGENT_DEFAULT_REPO", None)
+    if default_repo:
+        lines.append(
+            f"\nThe repository to work on is https://github.com/{default_repo} . If the user names it loosely "
+            f'(for example "the demo sandbox" or "{default_repo.split("/")[-1]}"), use that URL; do not ask for it.'
+        )
+
     if history:
         lines.append("\n## Earlier in this conversation")
         for past in history:

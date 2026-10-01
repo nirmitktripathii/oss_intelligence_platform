@@ -1,6 +1,7 @@
 """Tests for the agent planner: decision loop, approval gates, memory, and the MCP tool layer."""
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import httpx
@@ -561,6 +562,21 @@ def test_planner_prompt_tells_the_model_the_request_may_be_misheard_speech():
     assert "speech recognition" in PLANNER_SYSTEM_PROMPT
     assert "Ollama" in PLANNER_SYSTEM_PROMPT
     assert "Never invent an issue id" in PLANNER_SYSTEM_PROMPT
+
+
+def test_default_repo_is_named_in_the_prompt_only_when_configured(monkeypatch):
+    from app.agent.planner import build_prompt
+    from app.schemas.agent import Mission
+
+    now = datetime.now(timezone.utc)
+    mission = Mission(id="m", session_id="s", utterance="fix the demo sandbox", created_at=now, updated_at=now)
+    monkeypatch.setattr(app_settings, "AGENT_DEFAULT_REPO", None)
+    assert "repository to work on" not in build_prompt(mission, [], [], 5)
+
+    monkeypatch.setattr(app_settings, "AGENT_DEFAULT_REPO", "acme/widgets")
+    prompt = build_prompt(mission, [], [], 5)
+    assert "https://github.com/acme/widgets" in prompt
+    assert '"widgets"' in prompt
 
 
 # ── Authenticated MCP server ──────────────────────────────────────────────── #

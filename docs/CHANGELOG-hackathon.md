@@ -254,4 +254,4 @@ for the Open Source mini-challenge.
 - Tests: real-server checks for 401 without or with a wrong token, and the client sending the token. Git/CI suite 18 pass; planner suite 33 pass.
 - Shared demo: `AUTH_ALLOWED_LOGINS=*` admits any signed-in GitHub user (sign-in and conversation ownership still required). New `GITCI_ALLOWED_REPOS` pins the Git/CI server to `nirmitktripathii/gitscout-demo-sandbox`, which is what makes that safe; `ci_status` is checked against it too. `demo/reset-demo-repo.ps1` clears visitors' draft PRs and branches. Tests: 2 new Git/CI, 2 new auth.
 - Not built (roadmap): acting on a visitor's own repos needs their GitHub token, a fork-and-PR flow and test runs in an isolated sandbox with no secrets.
-
+- Hosted run proven: the live app cloned `gitscout-demo-sandbox`, fixed the bug, ran the tests, committed and opened a draft PR from Render. Two things found: a bare repo name gave the model no owner, so it asked for a URL; and the GitHub token needed Contents write. New `AGENT_DEFAULT_REPO` names the working repo in the planner prompt so "the demo sandbox" resolves without a URL. 1 new planner test.
