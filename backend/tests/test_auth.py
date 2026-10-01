@@ -365,3 +365,25 @@ async def test_read_only_planner_cannot_call_a_gated_tool_even_if_the_model_asks
 
     assert mission.status != MissionStatus.AWAITING_APPROVAL
     assert source.calls == []
+
+
+def test_wildcard_allow_list_admits_any_signed_in_user_but_not_anonymous(monkeypatch):
+    monkeypatch.setattr(settings, "AUTH_ALLOWED_LOGINS", "*")
+    assert auth.may_write(auth.AuthUser("a-stranger"))
+    assert not auth.may_write(None)
+
+
+@pytest.mark.asyncio
+async def test_wildcard_still_needs_sign_in_and_ownership(client: httpx.AsyncClient, registry, llm, monkeypatch):  # noqa: F811
+    monkeypatch.setattr(settings, "AUTH_ALLOWED_LOGINS", "*")
+    mission = await _gated_mission(client, llm, _bearer("visitor-one"))
+    url = f"/api/v1/agent/missions/{mission['id']}/approval"
+
+    assert (await client.post(url, json={"approved": True}, headers=_session(mission))).status_code == 401
+    other = await client.post(url, json={"approved": True}, headers={**_bearer("visitor-two"), **_session(mission)})
+    assert other.status_code == 403
+    assert registry.calls == []
+
+    llm.script += [_final("Opened.")]
+    owner = await client.post(url, json={"approved": True}, headers={**_bearer("visitor-one"), **_session(mission)})
+    assert owner.status_code == 200 and registry.calls == [("open_pr", {"title": "Fix crash"})]

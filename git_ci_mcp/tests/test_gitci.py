@@ -219,3 +219,37 @@ def test_server_refuses_to_listen_publicly_without_a_strong_token():
         require_token("0.0.0.0", "")
     with pytest.raises(RuntimeError, match="at least 32"):
         require_token("0.0.0.0", "short")
+
+
+def test_allowed_repos_pins_the_server_to_named_repos(tmp_path):
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path)
+    cfg.allowed_owners = ["me"]
+    cfg.allowed_repos = ["me/demo"]
+    manager = SandboxManager(cfg)
+
+    manager.check_repo("me", "demo")
+    manager.check_repo("ME", "Demo")  # GitHub names are case-insensitive
+    with pytest.raises(GitCiError, match="not an allowed repo"):
+        manager.check_repo("me", "other")
+    with pytest.raises(GitCiError, match="not an allowed owner"):
+        manager.check_repo("stranger", "demo")
+
+    cfg.allowed_repos = []  # unset: any repo of an allowed owner
+    manager.check_repo("me", "other")
+
+
+def test_ci_status_respects_the_repo_allow_list(monkeypatch):
+    from gitci_mcp import server
+
+    monkeypatch.setattr(server.settings, "allowed_owners", ["me"])
+    monkeypatch.setattr(server.settings, "allowed_repos", ["me/demo"])
+
+    async def never(*_a, **_k):
+        raise AssertionError("must not reach GitHub for a repo that is not allowed")
+
+    monkeypatch.setattr(server._github, "ci_status", never)
+
+    result = asyncio.run(server.ci_status("torvalds/linux", "main"))
+
+    assert "not an allowed owner" in result["error"]

@@ -150,6 +150,8 @@ class Settings(BaseSettings):
     AUTH_GITHUB_CLIENT_ID: Optional[str] = None
     AUTH_GITHUB_CLIENT_SECRET: Optional[str] = None
     AUTH_GITHUB_CALLBACK_URL: Optional[str] = None
+    # "*" lets any signed-in GitHub user run tools that change things (only safe when those tools
+    # are pinned to a throwaway repo). Empty = nobody.
     AUTH_ALLOWED_LOGINS: str = ""
     AUTH_TOKEN_TTL_SECONDS: int = 28800       # a signed-in browser stays signed in for 8 hours
     # Local demo and tests only: lets anyone run write tools without signing in. Never set this

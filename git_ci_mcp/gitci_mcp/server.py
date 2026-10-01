@@ -105,7 +105,11 @@ async def ci_status(repo: str, ref: str) -> dict:
     owner, _, name = repo.partition("/")
     if not owner or not name:
         return {"error": "repo must look like owner/name"}
-    return await _guard(_github.ci_status(owner, name, ref))
+
+    async def go():
+        _sandboxes.check_repo(owner, name)
+        return await _github.ci_status(owner, name, ref)
+    return await _guard(go())
 
 
 @mcp.tool()

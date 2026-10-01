@@ -99,3 +99,25 @@ The hosted agent can only change things if the Git/CI MCP server is deployed and
    (it runs their tests on the server). Keep it to accounts you control.
 4. `gitscout-api` lists the server in `AGENT_MCP_SERVERS` with `"bearer_env": "GITCI_MCP_TOKEN"`:
    the token is read from the environment, never from that JSON.
+
+### Who may use it (shared demo)
+
+`AUTH_ALLOWED_LOGINS=*` lets any signed-in GitHub user approve changes, so judges can try the whole flow
+without being added by hand. That is safe only because the hosted Git/CI server is pinned to one
+throwaway repo: `GITCI_ALLOWED_REPOS=nirmitktripathii/gitscout-demo-sandbox` rejects every other repo,
+`GITHUB_TOKEN` can only write to that repo, and pull requests are always drafts. Visitors still sign in,
+and only the person who started a conversation can approve its changes.
+
+Do **not** keep `*` if you add a tool that can reach anything personal (email send, another repo).
+Switch to a comma-separated list of logins first.
+
+Visitors leave draft PRs and branches behind. Reset with `demoeset-demo-repo.ps1` (needs `gh`
+signed in as the repo owner). The server runs at most 3 sandboxes at once (they expire after 2 hours),
+so if several people try it together a fourth may be told to wait.
+
+### Not built: per-user access to their own repos
+
+Acting on a visitor's own repos needs their own GitHub token (a `public_repo` sign-in scope) and a
+fork-and-PR flow, and the server runs a repo's tests, so those would have to move into an isolated
+sandbox with no secrets (for example AWS CodeBuild or Fargate). That is the roadmap item, not part of this submission.
+

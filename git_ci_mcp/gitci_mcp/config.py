@@ -31,6 +31,10 @@ class Settings:
     # run_tests executes that repo's code on this machine.
     allowed_owners: List[str] = _csv("GITCI_ALLOWED_OWNERS", "nirmitktripathii")
 
+    # Optional, narrower: when set, only these exact repos ("owner/name") may be used. Use it when
+    # many people share the server, so one throwaway repo is the whole blast radius.
+    allowed_repos: List[str] = _csv("GITCI_ALLOWED_REPOS", "")
+
     # Exact commands run_tests may run (argv is split on spaces, no shell).
     test_commands: List[str] = _csv("GITCI_TEST_COMMANDS", "pytest -q,python -m pytest -q,npm test,go test ./...")
     test_timeout_seconds: int = int(os.getenv("GITCI_TEST_TIMEOUT", "180"))

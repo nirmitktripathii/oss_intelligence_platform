@@ -98,8 +98,11 @@ services:
         sync: false
       - key: AUTH_GITHUB_CALLBACK_URL
         value: "https://gitscout-api.onrender.com/api/v1/auth/github/callback"
+      # "*" = any signed-in GitHub user may approve changes. Safe only because the hosted Git/CI
+      # server is pinned to one throwaway repo (GITCI_ALLOWED_REPOS). Use a comma-separated list of
+      # logins to restrict it.
       - key: AUTH_ALLOWED_LOGINS
-        value: "nirmitktripathii"
+        value: "*"
       # Amazon Bedrock (Nova) provider. Paste the Bedrock API key in the Render dashboard;
       # never commit it. Leaving it unset keeps Bedrock dormant and Gemini answering.
       - key: AWS_BEARER_TOKEN_BEDROCK
@@ -158,6 +161,9 @@ services:
         value: "0.0.0.0"
       - key: GITCI_ALLOWED_OWNERS
         value: "nirmitktripathii"
+      # Shared with every signed-in visitor, so pin it to the one throwaway repo.
+      - key: GITCI_ALLOWED_REPOS
+        value: "nirmitktripathii/gitscout-demo-sandbox"
       - key: GITCI_AUTHOR_NAME
         value: "Mission Control Bot"
       - key: GITCI_AUTHOR_EMAIL
