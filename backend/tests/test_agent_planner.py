@@ -403,7 +403,8 @@ def _auth(mission: dict) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_api_mission_approval_round_trip(client: httpx.AsyncClient, api_registry, llm):
+async def test_api_mission_approval_round_trip(client: httpx.AsyncClient, api_registry, llm, monkeypatch):
+    monkeypatch.setattr(app_settings, "AGENT_ALLOW_ANONYMOUS_WRITES", True)  # local-demo mode; auth is tested in test_auth.py
     llm.script += [_tool("demo.open_pr", title="Fix crash")]
     created = await client.post("/api/v1/agent/missions", json={"utterance": "open a PR"})
     assert created.status_code == 200
@@ -504,7 +505,8 @@ async def test_api_streams_progress_then_the_mission(client: httpx.AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_api_stream_pauses_at_the_gate_and_resumes(client: httpx.AsyncClient, api_registry, llm):
+async def test_api_stream_pauses_at_the_gate_and_resumes(client: httpx.AsyncClient, api_registry, llm, monkeypatch):
+    monkeypatch.setattr(app_settings, "AGENT_ALLOW_ANONYMOUS_WRITES", True)  # local-demo mode; auth is tested in test_auth.py
     llm.script += [_tool("demo.open_pr", title="Fix crash")]
     events = _events(await client.post("/api/v1/agent/missions/stream", json={"utterance": "open a PR"}))
     paused = events[-1][1]

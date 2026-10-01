@@ -1,4 +1,5 @@
 import { API_BASE } from '@/lib/api-client';
+import { authHeaders } from '@/lib/auth-client';
 import type { AgentEvent, Mission } from '@/types/agent';
 
 /** Error the UI can show as-is; `status` 503 means the agent is not configured on this backend. */
@@ -46,6 +47,12 @@ async function failure(res: Response): Promise<AgentError> {
   if (res.status === 503) {
     return new AgentError('The agent is not enabled on this backend yet.', 503);
   }
+  if (res.status === 401) {
+    return new AgentError(detail || 'Sign in to do that.', 401);
+  }
+  if (res.status === 403) {
+    return new AgentError(detail || 'This account is not allowed to do that.', 403);
+  }
   if (res.status === 429) {
     return new AgentError('Too many requests. Give it a minute and try again.', 429);
   }
@@ -63,7 +70,7 @@ async function stream(
   onEvent: (e: AgentEvent) => void,
   signal?: AbortSignal,
 ): Promise<Mission> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...authHeaders() };
   if (sessionToken) headers['X-Session-Token'] = sessionToken;
 
   let res: Response;

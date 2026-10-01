@@ -19,7 +19,7 @@ function Start-Window($title, $dir, $cmd) {
 
 Start-Window "gitscout-mcp :9000" "$root\mcp_server" "`$env:MCP_PORT='9000'; `$env:GITSCOUT_API_BASE='https://gitscout-api.onrender.com/api/v1'; python -m gitscout_mcp.server"
 Start-Window "gitci-mcp :9100"    "$root\git_ci_mcp"  "`$env:MCP_PORT='9100'; `$env:GITCI_ALLOWED_OWNERS='$Owner'; python -m gitci_mcp.server"
-Start-Window "backend :8000"      "$root\backend"     "`$env:AGENT_MAX_STEPS='14'; `$env:AGENT_MCP_SERVERS='$servers'; python -m uvicorn app.main:app --port 8000"
+Start-Window "backend :8000"      "$root\backend"     "`$env:AGENT_MAX_STEPS='14'; `$env:AGENT_ALLOW_ANONYMOUS_WRITES='true'; `$env:AGENT_MCP_SERVERS='$servers'; python -m uvicorn app.main:app --port 8000"
 Start-Window "frontend :3000"     "$root\frontend"    "`$env:NEXT_PUBLIC_API_URL='http://localhost:8000/api/v1'; npm run dev"
 
 Write-Host "Open http://localhost:3000/alexa in about 20 seconds."

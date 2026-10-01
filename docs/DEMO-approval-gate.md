@@ -29,6 +29,10 @@ writes pauses for the user's yes. Only reading is automatic.
     $env:GITHUB_TOKEN = "<your token>"
     .\demo\start-demo.ps1
 
+`start-demo.ps1` sets `AGENT_ALLOW_ANONYMOUS_WRITES=true` for the local backend, so the demo needs no
+sign-in. That switch exists only for this local demo: a deployed backend leaves it off, and then only a
+signed-in, allow-listed GitHub user can approve a change (see "Sign-in" below).
+
 Open http://localhost:3000/alexa and say or type:
 
 > Fix the bug in https://github.com/nirmitktripathii/gitscout-demo-sandbox. The issue is that
@@ -58,3 +62,24 @@ Decline any step and the mission stops there; nothing after it runs.
 - `run_tests` runs only an allow-listed command, without a shell, with a time limit and a
   scrubbed environment. It still executes the repo's code, which is why this runs locally on a
   repo you own and is not deployed.
+
+## Sign-in (deployed backend)
+
+Anyone can use the read-only tools. A tool that changes things is hidden from the model, and refused,
+unless the caller is signed in with GitHub **and** their login is on `AUTH_ALLOWED_LOGINS`. Only the
+user who started a conversation can approve its changes; declining is always allowed.
+
+One-time setup:
+
+1. GitHub > Settings > Developer settings > OAuth Apps > New OAuth App.
+   Homepage URL: `https://oss-intelligence-platform.vercel.app`.
+   Authorization callback URL: `https://gitscout-api.onrender.com/api/v1/auth/github/callback`.
+2. Generate a client secret. On Render (service `gitscout-api`) set:
+   - `AUTH_GITHUB_CLIENT_ID`, `AUTH_GITHUB_CLIENT_SECRET` from the OAuth App
+   - `AUTH_GITHUB_CALLBACK_URL` = the callback URL above, exactly
+   - `AUTH_SECRET` = a random string of 32 or more characters (`python -c "import secrets; print(secrets.token_urlsafe(48))"`). Changing it signs everyone out.
+   - `AUTH_ALLOWED_LOGINS` = comma-separated GitHub logins, e.g. `nirmitktripathii`. Empty means nobody may change anything.
+   - `FRONTEND_URL` must be the Vercel URL (already set in `deploy/render.yaml`).
+3. Open `/alexa`, click "Sign in with GitHub".
+
+The OAuth app asks for no scopes (public profile only): it proves who you are and nothing more.
