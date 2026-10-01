@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ApprovalPreview } from '@/components/alexa/approval-preview';
 import { MiniMarkdown } from '@/components/alexa/mini-markdown';
 import { StepTimeline } from '@/components/alexa/step-timeline';
 import { useAgentSession, type Turn } from '@/hooks/use-agent-session';
@@ -28,6 +29,7 @@ const SUGGESTIONS = [
   'Find me a beginner-friendly Python issue and explain what is wrong in it',
   'Are there any funded bounties for Rust right now?',
   'Is the GitScout backend healthy?',
+  'Fix the bug in the demo sandbox and open a draft pull request when the tests pass',
 ];
 
 const YES = /^\s*(yes|yeah|yep|approve|approved|go ahead|do it|ok|okay|sure|confirm)\b/i;
@@ -170,7 +172,7 @@ export default function AlexaPage() {
         </p>
       )}
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Conversation */}
         <section className="flex min-h-0 flex-col rounded-lg border border-border bg-card/60">
           <div ref={listRef} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
@@ -338,7 +340,7 @@ function TurnView({
         {turn.utterance}
       </div>
 
-      <StepTimeline steps={turn.steps} thinking={turn.working} />
+      <StepTimeline steps={turn.steps} thinking={turn.working} results={mission?.steps} />
 
       {pending && (
         <div className="space-y-2 rounded-md border border-bounty-gold/40 bg-bounty-gold/5 p-3">
@@ -347,12 +349,9 @@ function TurnView({
             Approval needed
           </div>
           <p className="text-xs text-muted-foreground">
-            It wants to run <span className="font-semibold text-foreground">{pending.tool}</span> with exactly
-            these arguments:
+            It wants to run <span className="font-semibold text-foreground">{pending.tool}</span>:
           </p>
-          <pre className="overflow-x-auto rounded border border-border bg-background/70 p-2 text-[11px]">
-            {JSON.stringify(pending.arguments, null, 2)}
-          </pre>
+          <ApprovalPreview step={pending} history={mission?.steps ?? []} />
           <div className="flex gap-2">
             <Button size="sm" className="h-8 text-xs" onClick={() => onDecide(true)} disabled={busy}>
               Approve
