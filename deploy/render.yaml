@@ -6,7 +6,7 @@
 services:
   # 1. FastAPI Core Web Service
   - type: web
-    name: gitscout-backend
+    name: gitscout-api
     env: python
     region: oregon # us-west / oregon free tier
     plan: free
@@ -32,7 +32,7 @@ services:
       - key: DATABASE_URL
         sync: false # Set in Render Dashboard: postgresql+asyncpg://<user>:<password>@<neon_host>.neon.tech/gitscout?sslmode=require
       - key: CORS_ORIGINS
-        value: "https://gitscout.vercel.app,https://gitscout.dev,http://localhost:3000"
+        value: "https://oss-intelligence-platform.vercel.app,https://gitscout.dev,http://localhost:3000"
       - key: RATE_LIMIT_DEFAULT
         value: "120/minute"
       - key: GITHUB_TOKEN
@@ -72,7 +72,7 @@ services:
       - key: LEMON_SQUEEZY_WEBHOOK_SECRET
         sync: false
       - key: FRONTEND_URL
-        value: "https://gitscout.vercel.app"
+        value: "https://oss-intelligence-platform.vercel.app"
       # Agent planner (Developer Mission Control). Dormant until this is set. The URL must be
       # the gitscout-mcp service below; only read-only tools are auto-approved, everything
       # else pauses for the user's confirmation.
@@ -135,25 +135,25 @@ services:
       - key: DATABASE_URL
         fromService:
           type: web
-          name: gitscout-backend
+          name: gitscout-api
           envVarKey: DATABASE_URL
       - key: GITHUB_TOKEN
         fromService:
           type: web
-          name: gitscout-backend
+          name: gitscout-api
           envVarKey: GITHUB_TOKEN
       - key: TELEGRAM_BOT_TOKEN
         fromService:
           type: web
-          name: gitscout-backend
+          name: gitscout-api
           envVarKey: TELEGRAM_BOT_TOKEN
       - key: DISCORD_WEBHOOK_URL
         fromService:
           type: web
-          name: gitscout-backend
+          name: gitscout-api
           envVarKey: DISCORD_WEBHOOK_URL
       - key: RESEND_API_KEY
         fromService:
           type: web
-          name: gitscout-backend
+          name: gitscout-api
           envVarKey: RESEND_API_KEY
