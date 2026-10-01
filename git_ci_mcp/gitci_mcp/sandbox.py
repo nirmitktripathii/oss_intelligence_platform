@@ -162,11 +162,20 @@ class SandboxManager:
                 f"{', '.join(self.cfg.allowed_owners)}."
             )
 
+    def check_repo(self, owner: str, name: str) -> None:
+        self._check_owner(owner)
+        allowed = {r.lower() for r in self.cfg.allowed_repos}
+        if allowed and f"{owner}/{name}".lower() not in allowed:
+            raise GitCiError(
+                f"'{owner}/{name}' is not an allowed repo. This server only works on: "
+                f"{', '.join(self.cfg.allowed_repos)}."
+            )
+
     # ---------------------------------------------------------------- operations
     async def create(self, repo_url: str, ref: Optional[str] = None, *, source: Optional[str] = None) -> Dict[str, Any]:
         """Clone into a fresh sandbox. `source` (tests only) replaces the clone URL."""
         owner, name = parse_repo_url(repo_url)
-        self._check_owner(owner)
+        self.check_repo(owner, name)
         if ref:
             check_ref(ref, "ref")
         self._sweep()

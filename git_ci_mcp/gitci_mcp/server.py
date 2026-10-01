@@ -12,6 +12,7 @@ from typing import Optional
 
 from mcp.server.mcpserver import MCPServer
 
+from .auth import BearerAuthMiddleware, require_token
 from .config import settings
 from .github import GitHub
 from .sandbox import GitCiError, SandboxManager
@@ -104,7 +105,11 @@ async def ci_status(repo: str, ref: str) -> dict:
     owner, _, name = repo.partition("/")
     if not owner or not name:
         return {"error": "repo must look like owner/name"}
-    return await _guard(_github.ci_status(owner, name, ref))
+
+    async def go():
+        _sandboxes.check_repo(owner, name)
+        return await _github.ci_status(owner, name, ref)
+    return await _guard(go())
 
 
 @mcp.tool()
@@ -125,11 +130,16 @@ async def destroy_sandbox(sandbox_id: str) -> dict:
 
 
 def create_app():
-    return mcp.streamable_http_app(host=settings.host)
+    """The ASGI app. With GITCI_MCP_TOKEN set, every request must carry it as a bearer token."""
+    require_token(settings.host, settings.mcp_token)
+    app = mcp.streamable_http_app(host=settings.host)
+    return BearerAuthMiddleware(app, settings.mcp_token) if settings.mcp_token else app
 
 
 def main() -> None:
-    mcp.run(transport="streamable-http", host=settings.host, port=settings.port)
+    import uvicorn
+
+    uvicorn.run(create_app(), host=settings.host, port=settings.port)
 
 
 if __name__ == "__main__":

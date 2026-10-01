@@ -245,3 +245,13 @@ for the Open Source mini-challenge.
 - The OAuth `state` is signed, expires in 10 minutes and is bound to the browser by an httponly cookie, so a forged callback cannot sign anyone in.
 - `/alexa` shows sign-in, sign-out and a read-only notice. Tests: 25 new in `backend/tests/test_auth.py` (tokens, OAuth round trip with GitHub mocked, 401/403 paths, owner-only approval, planner read-only paths).
 - Needs from the operator before it works on the hosted stack: a GitHub OAuth App and the `AUTH_*` values on Render. Until then the hosted agent is read-only.
+
+## 2026-10-02 (Git/CI MCP on Render)
+
+- The Git/CI server now requires `Authorization: Bearer <GITCI_MCP_TOKEN>` on every request and refuses to start on a non-loopback address without a 32+ character token. Before this it had no authentication, so deploying it would have let anyone call its tools directly and skip the approval gate.
+- The agent's MCP client can send a bearer token (`bearer_env` in `AGENT_MCP_SERVERS` names the environment variable, so the secret is not in the JSON).
+- `deploy/render.yaml`: new `gitci-mcp` service; `gitscout-api` registers it, with only its read-only tools auto-approved, and a 14-step budget.
+- Tests: real-server checks for 401 without or with a wrong token, and the client sending the token. Git/CI suite 18 pass; planner suite 33 pass.
+- Shared demo: `AUTH_ALLOWED_LOGINS=*` admits any signed-in GitHub user (sign-in and conversation ownership still required). New `GITCI_ALLOWED_REPOS` pins the Git/CI server to `nirmitktripathii/gitscout-demo-sandbox`, which is what makes that safe; `ci_status` is checked against it too. `demo/reset-demo-repo.ps1` clears visitors' draft PRs and branches. Tests: 2 new Git/CI, 2 new auth.
+- Not built (roadmap): acting on a visitor's own repos needs their GitHub token, a fork-and-PR flow and test runs in an isolated sandbox with no secrets.
+

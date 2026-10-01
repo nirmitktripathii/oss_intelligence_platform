@@ -2,7 +2,8 @@
 Sign-in for the agent endpoints.
 
 Anyone may use the read-only tools. Tools that change things (clone, edit, commit, pull
-request, email) need a signed-in user whose GitHub login is on ``AUTH_ALLOWED_LOGINS``.
+request, email) need a signed-in user whose GitHub login is on ``AUTH_ALLOWED_LOGINS``
+(``*`` = any signed-in GitHub user).
 
 Identity comes from GitHub OAuth (see ``app/api/v1/auth.py``). After sign-in the API hands the
 browser a short-lived signed token, sent back as ``Authorization: Bearer <token>``. Tokens are
@@ -112,7 +113,12 @@ def may_write(user: Optional[AuthUser]) -> bool:
     """Whether this caller may run tools that change things."""
     if settings.AGENT_ALLOW_ANONYMOUS_WRITES:
         return True
-    return user is not None and user.login.lower() in allowed_logins()
+    if user is None:
+        return False
+    allowed = allowed_logins()
+    # "*" opens it to every signed-in GitHub user. Safe only while the tools that change things are
+    # pinned to a throwaway repo (the hosted Git/CI server is); the caller must still sign in.
+    return "*" in allowed or user.login.lower() in allowed
 
 
 def require_user(user: Optional[AuthUser]) -> AuthUser:

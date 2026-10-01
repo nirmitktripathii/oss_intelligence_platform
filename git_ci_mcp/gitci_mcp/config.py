@@ -16,6 +16,10 @@ class Settings:
     host: str = os.getenv("MCP_HOST", "127.0.0.1")
     port: int = int(os.getenv("MCP_PORT", "9100"))
 
+    # Shared secret the agent backend must present (Authorization: Bearer ...). Required whenever the
+    # server listens beyond localhost; see gitci_mcp/auth.py.
+    mcp_token: str = os.getenv("GITCI_MCP_TOKEN", "")
+
     # Every sandbox is a directory under this root; nothing outside it is ever touched.
     sandbox_root: str = os.getenv("GITCI_SANDBOX_ROOT", os.path.join(tempfile.gettempdir(), "gitci-sandboxes"))
     max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "3"))
@@ -26,6 +30,10 @@ class Settings:
     # Point it at your own fork (the demo sandbox), never at repos you do not control, because
     # run_tests executes that repo's code on this machine.
     allowed_owners: List[str] = _csv("GITCI_ALLOWED_OWNERS", "nirmitktripathii")
+
+    # Optional, narrower: when set, only these exact repos ("owner/name") may be used. Use it when
+    # many people share the server, so one throwaway repo is the whole blast radius.
+    allowed_repos: List[str] = _csv("GITCI_ALLOWED_REPOS", "")
 
     # Exact commands run_tests may run (argv is split on spaces, no shell).
     test_commands: List[str] = _csv("GITCI_TEST_COMMANDS", "pytest -q,python -m pytest -q,npm test,go test ./...")

@@ -176,3 +176,80 @@ def test_edit_file_exact_match_and_recount_patch(tmp_path):
         assert (await mgr.run_tests(sid, "python -m pytest -q"))["passed"] is True
 
     asyncio.run(flow())
+
+
+# ── Access token in front of the MCP endpoint ─────────────────────────────── #
+
+
+def _asgi_ok():
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"ok"})
+    return app
+
+
+def test_bearer_middleware_only_lets_the_right_token_through():
+    import httpx
+
+    from gitci_mcp.auth import BearerAuthMiddleware
+
+    token = "t" * 40
+    app = BearerAuthMiddleware(_asgi_ok(), token)
+
+    async def call(headers):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
+            return await client.post("/mcp", headers=headers)
+
+    assert asyncio.run(call({})).status_code == 401
+    assert asyncio.run(call({"Authorization": "Bearer nope"})).status_code == 401
+    assert asyncio.run(call({"Authorization": token})).status_code == 401  # no scheme
+    assert asyncio.run(call({"Authorization": "Basic " + token})).status_code == 401
+    assert asyncio.run(call({"Authorization": "Bearer " + token})).status_code == 200
+    assert asyncio.run(call({"Authorization": "bearer " + token})).status_code == 200
+
+
+def test_server_refuses_to_listen_publicly_without_a_strong_token():
+    from gitci_mcp.auth import require_token
+
+    require_token("127.0.0.1", "")  # local demo: no token needed
+    require_token("localhost", "")
+    require_token("0.0.0.0", "t" * 40)
+    with pytest.raises(RuntimeError, match="GITCI_MCP_TOKEN is required"):
+        require_token("0.0.0.0", "")
+    with pytest.raises(RuntimeError, match="at least 32"):
+        require_token("0.0.0.0", "short")
+
+
+def test_allowed_repos_pins_the_server_to_named_repos(tmp_path):
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path)
+    cfg.allowed_owners = ["me"]
+    cfg.allowed_repos = ["me/demo"]
+    manager = SandboxManager(cfg)
+
+    manager.check_repo("me", "demo")
+    manager.check_repo("ME", "Demo")  # GitHub names are case-insensitive
+    with pytest.raises(GitCiError, match="not an allowed repo"):
+        manager.check_repo("me", "other")
+    with pytest.raises(GitCiError, match="not an allowed owner"):
+        manager.check_repo("stranger", "demo")
+
+    cfg.allowed_repos = []  # unset: any repo of an allowed owner
+    manager.check_repo("me", "other")
+
+
+def test_ci_status_respects_the_repo_allow_list(monkeypatch):
+    from gitci_mcp import server
+
+    monkeypatch.setattr(server.settings, "allowed_owners", ["me"])
+    monkeypatch.setattr(server.settings, "allowed_repos", ["me/demo"])
+
+    async def never(*_a, **_k):
+        raise AssertionError("must not reach GitHub for a repo that is not allowed")
+
+    monkeypatch.setattr(server._github, "ci_status", never)
+
+    result = asyncio.run(server.ci_status("torvalds/linux", "main"))
+
+    assert "not an allowed owner" in result["error"]
