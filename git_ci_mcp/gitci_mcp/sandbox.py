@@ -116,9 +116,10 @@ class SandboxManager:
         cmd = ["git", "-c", f"core.hooksPath={hooks}", "-c", "protocol.ext.allow=never", *args]
 
         def run() -> subprocess.CompletedProcess:
+            # Bytes in and out: text mode would turn every "\n" of a patch into "\r\n" on Windows.
             return subprocess.run(
-                cmd, cwd=str(cwd) if cwd else None, input=stdin, capture_output=True, text=True,
-                encoding="utf-8", errors="replace", timeout=timeout, env=self._git_env(extra_env),
+                cmd, cwd=str(cwd) if cwd else None, input=stdin.encode("utf-8") if stdin is not None else None,
+                capture_output=True, timeout=timeout, env=self._git_env(extra_env),
             )
 
         try:
@@ -127,12 +128,13 @@ class SandboxManager:
             raise GitCiError(f"git {args[0]} timed out after {timeout}s.")
         except FileNotFoundError:
             raise GitCiError("git is not installed on the server.")
+        out = done.stdout.decode("utf-8", errors="replace")
         if done.returncode != 0:
-            msg = (done.stderr or done.stdout or "").strip()
+            msg = (done.stderr.decode("utf-8", errors="replace") or out).strip()
             if secret:
                 msg = msg.replace(secret, "***")
             raise GitCiError(f"git {args[0]} failed: {msg[-600:]}")
-        return done.stdout
+        return out
 
     def _cap(self, text: str) -> str:
         cap = self.cfg.output_cap_bytes
@@ -172,7 +174,8 @@ class SandboxManager:
         d = self.root / sid
         d.mkdir(parents=True)
         try:
-            args = ["clone", "--depth", "50", "--no-tags", "--single-branch"]
+            # autocrlf off: keep the repo's own line endings so a patch written from read_file applies.
+            args = ["clone", "-c", "core.autocrlf=false", "--depth", "50", "--no-tags", "--single-branch"]
             if ref:
                 args += ["--branch", ref]
             await self._git(None, *args, "--", source or f"https://github.com/{owner}/{name}.git", str(d / "repo"))
@@ -206,9 +209,67 @@ class SandboxManager:
         files = validate_patch(diff, self.cfg.max_patch_bytes)
         repo = self._repo(sandbox_id)
         text = diff if diff.endswith("\n") else diff + "\n"
-        await self._git(repo, "apply", "--check", "--whitespace=nowarn", "-", stdin=text)
-        await self._git(repo, "apply", "--whitespace=nowarn", "-", stdin=text)
+        # --recount: models often get a hunk's line counts wrong; git recomputes them from the body.
+        flags = ["--recount", "--whitespace=nowarn"]
+        try:
+            await self._git(repo, "apply", "--check", *flags, "-", stdin=text)
+        except GitCiError as exc:
+            raise GitCiError(
+                f"{exc} Hint: copy the context lines exactly from read_file, or use edit_file with the exact old and new text."
+            )
+        await self._git(repo, "apply", *flags, "-", stdin=text)
         return {"applied": True, "files": files}
+
+    def _inside(self, sandbox_id: str, rel: str) -> Path:
+        """Resolve a repo-relative path, refusing anything outside the work tree or inside .git."""
+        repo = self._repo(sandbox_id).resolve()
+        if _bad_patch_path(rel or "x") or not rel:
+            raise GitCiError("That path is not allowed.")
+        target = (repo / rel).resolve()
+        if repo != target and repo not in target.parents:
+            raise GitCiError("That path is not allowed.")
+        return target
+
+    async def edit_file(self, sandbox_id: str, path: str, old: str, new: str) -> Dict[str, Any]:
+        """Replace one exact occurrence of `old` with `new`. More reliable for a model than a diff."""
+        target = self._inside(sandbox_id, path)
+        if not target.is_file():
+            raise GitCiError(f"'{path}' is not a file in this sandbox.")
+        if not old:
+            raise GitCiError("'old' must be the exact text to replace.")
+        if len(old) + len(new) > self.cfg.max_patch_bytes:
+            raise GitCiError("The edit is too large.")
+        raw = target.read_bytes()
+        if b"\x00" in raw[:8000]:
+            raise GitCiError("That looks like a binary file.")
+        text = raw.decode("utf-8")
+        crlf = "\r\n" in text
+        body, old_n, new_n = (t.replace("\r\n", "\n") for t in (text, old, new))
+        count = body.count(old_n)
+        if count != 1:
+            raise GitCiError(
+                f"'old' matched {count} times; it must match exactly once. Include more surrounding lines from read_file."
+            )
+        body = body.replace(old_n, new_n, 1)
+        target.write_bytes((body.replace("\n", "\r\n") if crlf else body).encode("utf-8"))
+        return {"edited": path, "removed_lines": old_n.count("\n") + 1, "added_lines": new_n.count("\n") + 1}
+
+    async def list_files(self, sandbox_id: str) -> Dict[str, Any]:
+        """Tracked files only (git ls-files), so build output and .git never appear."""
+        out = await self._git(self._repo(sandbox_id), "ls-files")
+        files = out.splitlines()
+        return {"count": len(files), "files": files[:300], "truncated": len(files) > 300}
+
+    async def read_file(self, sandbox_id: str, path: str) -> Dict[str, Any]:
+        target = self._inside(sandbox_id, path)
+        if not target.is_file():
+            raise GitCiError(f"'{path}' is not a file in this sandbox.")
+        cap = 20000
+        data = target.read_bytes()[: cap + 1]
+        if b"\x00" in data:
+            raise GitCiError("That looks like a binary file.")
+        text = data.decode("utf-8", errors="replace")
+        return {"path": path, "content": text[:cap], "truncated": len(data) > cap}
 
     async def diff(self, sandbox_id: str) -> Dict[str, Any]:
         repo = self._repo(sandbox_id)
