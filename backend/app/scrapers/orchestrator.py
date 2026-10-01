@@ -7,7 +7,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import async_session_maker, init_db
@@ -367,22 +367,29 @@ class ScraperOrchestrator:
         """
         import httpx
         logger.info("[*] Checking for closed, assigned, or fixed issues to prune...")
-        stmt = select(Issue)
-        res = await session.execute(stmt)
-        all_issues = res.scalars().all()
 
-        pruned_count = 0
+        # Snapshot plain coordinates, then END the read transaction before the sweep.
+        # The sweep makes one GitHub call per row (~15 min for ~1k rows); holding a
+        # transaction open that long leaves the connection idle-in-transaction, Neon
+        # closes it, and every later delete + the final commit fail
+        # (InterfaceError -> PendingRollbackError), losing the whole run's work.
+        res = await session.execute(
+            select(Issue.id, Issue.repo_owner, Issue.repo_name, Issue.issue_number)
+        )
+        targets = res.all()
+        await session.commit()
+
+        stale_ids: List[str] = []
         headers = self.client._build_headers()
 
         async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-            for iss in all_issues:
+            for issue_id, owner, repo, number in targets:
                 try:
-                    url = f"{self.client.base_url}/repos/{iss.repo_owner}/{iss.repo_name}/issues/{iss.issue_number}"
+                    url = f"{self.client.base_url}/repos/{owner}/{repo}/issues/{number}"
                     resp = await client.get(url, headers=headers)
                     if resp.status_code == 404:
-                        await session.delete(iss)
-                        pruned_count += 1
-                        logger.info(f"[PRUNED] Purged 404 deleted issue: {iss.id}")
+                        stale_ids.append(issue_id)
+                        logger.info(f"[PRUNED] Purged 404 deleted issue: {issue_id}")
                     elif resp.status_code == 200:
                         data = resp.json()
                         if (
@@ -391,16 +398,34 @@ class ScraperOrchestrator:
                             or data.get("assignee") is not None
                             or len(data.get("assignees", [])) > 0
                         ):
-                            await session.delete(iss)
-                            pruned_count += 1
-                            logger.info(f"[PRUNED] Purged closed/assigned issue: {iss.id} (state={data.get('state')})")
+                            stale_ids.append(issue_id)
+                            logger.info(f"[PRUNED] Purged closed/assigned issue: {issue_id} (state={data.get('state')})")
                 except Exception as exc:
-                    logger.error(f"Error checking issue {iss.id} for pruning: {exc}")
+                    logger.error(f"Error checking issue {issue_id} for pruning: {exc}")
 
-        if pruned_count > 0:
-            await session.commit()
+        # A fresh, short transaction (pool_pre_ping validates the connection on checkout).
+        pruned_count = await self._delete_issues(session, stale_ids)
         logger.info(f"[OK] Pruning complete: purged {pruned_count} closed or stale issues.")
         return pruned_count
+
+    @staticmethod
+    async def _delete_issues(session: AsyncSession, issue_ids: List[str]) -> int:
+        """Bulk-delete issues and their triage reports in one short transaction.
+
+        Triage reports are deleted explicitly rather than via ORM/DB cascade: the ORM
+        cascade lazy-loads each report (a round trip per row), and SQLite doesn't
+        enforce ON DELETE CASCADE without a pragma.
+        """
+        if not issue_ids:
+            return 0
+        deleted = 0
+        for start in range(0, len(issue_ids), 500):
+            chunk = issue_ids[start:start + 500]
+            await session.execute(delete(TriageReport).where(TriageReport.issue_id.in_(chunk)))
+            result = await session.execute(delete(Issue).where(Issue.id.in_(chunk)))
+            deleted += result.rowcount or 0
+        await session.commit()
+        return deleted
 
     async def prune_noise(self, session: AsyncSession) -> int:
         """Purge already-stored rows that are non-actionable content, not real issues.
@@ -415,7 +440,7 @@ class ScraperOrchestrator:
         res = await session.execute(stmt)
         all_issues = res.scalars().all()
 
-        pruned_count = 0
+        noise_ids: List[str] = []
         for iss in all_issues:
             actionable, reason = NoiseFilter.is_actionable_issue(
                 title=iss.title or "",
@@ -425,12 +450,10 @@ class ScraperOrchestrator:
                 repo_name=iss.repo_name,
             )
             if not actionable:
-                await session.delete(iss)
-                pruned_count += 1
+                noise_ids.append(iss.id)
                 logger.info("[PRUNED] Non-actionable %s (%s): %s", iss.id, reason, (iss.title or "")[:80])
 
-        if pruned_count > 0:
-            await session.commit()
+        pruned_count = await self._delete_issues(session, noise_ids)
         logger.info(f"[OK] Noise pruning complete: purged {pruned_count} non-actionable rows.")
         return pruned_count
 
