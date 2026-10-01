@@ -32,6 +32,23 @@ mcp = MCPServer(
 )
 
 
+_DOMAINS = {
+    "ai": "AI/ML", "ml": "AI/ML", "aiml": "AI/ML", "machinelearning": "AI/ML", "artificialintelligence": "AI/ML",
+    "data": "Data", "web": "Web", "cloud": "Cloud/DevOps", "devops": "Cloud/DevOps", "clouddevops": "Cloud/DevOps",
+    "security": "Security", "systems": "Systems", "system": "Systems",
+}
+_DIFFICULTIES = {"easy": "Easy", "beginner": "Easy", "medium": "Medium", "hard": "Hard"}
+
+
+def _canon(value: Optional[str], table: dict) -> Optional[str]:
+    """Map the spellings a model tends to use ("ai_ml", "ai/ml", "beginner") onto the backend's
+    exact enum values. Unknown values pass through so the API can still reject them."""
+    if not value:
+        return None
+    key = "".join(ch for ch in value.lower() if ch.isalnum())
+    return table.get(key, value)
+
+
 def _issue_row(i: dict) -> dict:
     """Compact, token-friendly projection of an issue for list results."""
     owner, name = i.get("repo_owner", ""), i.get("repo_name", "")
@@ -92,8 +109,9 @@ async def search_issues(
 
     Args:
         query: Keyword searched in the title, body, and repository name.
-        domain: Engineering domain filter (e.g. "ai_ml", "web", "systems").
-        difficulty: Difficulty tier filter (e.g. "Easy", "Medium", "Hard").
+        domain: Engineering domain. Exactly one of "AI/ML", "Data", "Web", "Cloud/DevOps",
+            "Security", "Systems".
+        difficulty: Exactly one of "Easy", "Medium", "Hard" ("Easy" means beginner friendly).
         tech_stack: Tech tag(s), comma-separated to match ANY (e.g. "Python,Rust").
         has_bounty: If true, only issues with a funded bounty.
         min_bounty: Minimum bounty amount in USD.
@@ -107,8 +125,8 @@ async def search_issues(
     """
     data = await GitScoutClient().list_issues(
         search=query or None,
-        domain=domain,
-        difficulty=difficulty,
+        domain=_canon(domain, _DOMAINS),
+        difficulty=_canon(difficulty, _DIFFICULTIES),
         tech_stack=tech_stack,
         has_bounty=has_bounty,
         min_bounty=min_bounty,

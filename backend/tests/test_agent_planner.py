@@ -551,3 +551,11 @@ async def test_api_rejects_bad_input(client: httpx.AsyncClient, api_registry):
     assert (await client.post(
         "/api/v1/agent/missions/nope/approval", json={"approved": True}
     )).status_code == 404
+
+
+def test_planner_prompt_tells_the_model_the_request_may_be_misheard_speech():
+    from app.agent.planner import PLANNER_SYSTEM_PROMPT
+
+    assert "speech recognition" in PLANNER_SYSTEM_PROMPT
+    assert "Ollama" in PLANNER_SYSTEM_PROMPT
+    assert "Never invent an issue id" in PLANNER_SYSTEM_PROMPT

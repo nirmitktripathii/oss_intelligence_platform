@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
+import { pickBestAlternative } from '@/lib/tech-terms';
 
 // The Web Speech API is not in lib.dom for every TS version; describe only what is used.
 interface RecognitionResult {
   isFinal: boolean;
-  0: { transcript: string };
+  length: number;
+  [index: number]: { transcript: string };
 }
 interface RecognitionEvent {
   resultIndex: number;
@@ -15,6 +17,7 @@ interface Recognition {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  maxAlternatives: number;
   onresult: ((e: RecognitionEvent) => void) | null;
   onerror: ((e: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -42,7 +45,7 @@ const MIC_ERRORS: Record<string, string> = {
 };
 
 interface Options {
-  /** Called once with the final transcript when the user stops talking. */
+  /** Called with the transcript each time recording stops or is paused. It is not a request to send. */
   onTranscript: (text: string) => void;
 }
 
@@ -87,6 +90,8 @@ export function useSpeech({ onTranscript }: Options) {
     [voiceReplies],
   );
 
+  // Pausing and stopping are the same thing for the recognizer: end the session and hand back what
+  // was heard. The page appends it to the draft, so recording again carries on from there.
   const stopListening = React.useCallback(() => rec.current?.stop(), []);
 
   const startListening = React.useCallback(() => {
@@ -98,23 +103,33 @@ export function useSpeech({ onTranscript }: Options) {
     const r = new Ctor();
     r.lang = navigator.language || 'en-US';
     r.interimResults = true;
-    r.continuous = false;
+    // Continuous mode keeps listening across pauses; the default ends the session at the first gap.
+    r.continuous = true;
+    // Ask for alternatives so a technical term can be picked from a lower-ranked guess.
+    r.maxAlternatives = 5;
     let finalText = '';
+    let partial = '';
+    const heard = (res: RecognitionResult) => {
+      const options: string[] = [];
+      for (let k = 0; k < res.length; k++) options.push(res[k].transcript.trim());
+      return pickBestAlternative(options);
+    };
     r.onresult = (e) => {
-      let partial = '';
+      partial = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const res = e.results[i];
-        if (res.isFinal) finalText += res[0].transcript;
+        if (res.isFinal) finalText += (finalText ? ' ' : '') + heard(res);
         else partial += res[0].transcript;
       }
-      setInterim(partial || finalText);
+      setInterim([finalText, pickBestAlternative([partial.trim()])].filter(Boolean).join(' '));
     };
     r.onerror = (e) => setMicError(MIC_ERRORS[e.error] ?? 'Speech recognition failed. Type your request instead.');
     r.onend = () => {
       rec.current = null;
       setListening(false);
       setInterim('');
-      const text = finalText.trim();
+      // A phrase still being recognised when the session closed is better kept than lost.
+      const text = [finalText, pickBestAlternative([partial.trim()])].filter(Boolean).join(' ').trim();
       if (text) callback.current(text);
     };
     rec.current = r;
