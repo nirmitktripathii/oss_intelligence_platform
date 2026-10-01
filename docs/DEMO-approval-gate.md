@@ -111,7 +111,7 @@ and only the person who started a conversation can approve its changes.
 Do **not** keep `*` if you add a tool that can reach anything personal (email send, another repo).
 Switch to a comma-separated list of logins first.
 
-Visitors leave draft PRs and branches behind. Reset with `demoeset-demo-repo.ps1` (needs `gh`
+Visitors leave draft PRs and branches behind. Reset with `demo/reset-demo-repo.ps1` (needs `gh`
 signed in as the repo owner). The server runs at most 3 sandboxes at once (they expire after 2 hours),
 so if several people try it together a fourth may be told to wait.
 
