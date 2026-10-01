@@ -141,6 +141,21 @@ class Settings(BaseSettings):
     AGENT_MISSION_TTL_SECONDS: int = 86400    # how long a mission (and its session) is kept
     AGENT_RATE_LIMIT: str = "10/minute"       # per client, on starting and approving missions
 
+    # Sign-in for tools that change things (Git/CI, email). Anyone may use the read-only tools.
+    # Create a GitHub OAuth App whose callback URL is AUTH_GITHUB_CALLBACK_URL
+    # (https://<api host>/api/v1/auth/github/callback), then set these. AUTH_SECRET signs the
+    # session tokens: use 32+ random characters. Only logins in AUTH_ALLOWED_LOGINS (comma
+    # separated) may approve a write; empty means nobody can.
+    AUTH_SECRET: Optional[str] = None
+    AUTH_GITHUB_CLIENT_ID: Optional[str] = None
+    AUTH_GITHUB_CLIENT_SECRET: Optional[str] = None
+    AUTH_GITHUB_CALLBACK_URL: Optional[str] = None
+    AUTH_ALLOWED_LOGINS: str = ""
+    AUTH_TOKEN_TTL_SECONDS: int = 28800       # a signed-in browser stays signed in for 8 hours
+    # Local demo and tests only: lets anyone run write tools without signing in. Never set this
+    # on a public deployment.
+    AGENT_ALLOW_ANONYMOUS_WRITES: bool = False
+
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None

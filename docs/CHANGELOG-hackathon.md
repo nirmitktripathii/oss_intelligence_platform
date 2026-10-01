@@ -216,7 +216,6 @@ for the Open Source mini-challenge.
   once the account quota restriction is lifted, and record the first live Nova triage here.
 - Create the `gitscout-mcp` service on Render, set `UPSTASH_REDIS_*` on the backend, and run
   one mission against the hosted stack.
-- Real per-user authentication for the agent endpoints (before any side-effecting tool).
 - **Git/CI MCP** (branch · patch · run tests · CI status · draft PR) against one ephemeral
   demo sandbox.
 - Wire the **Email Orchestrator MCP** (upgrade to protocol 2025-11-25 / Streamable HTTP) as an
@@ -238,3 +237,11 @@ for the Open Source mini-challenge.
 - Verified live: one request through the real planner, GitScout MCP and Git/CI MCP produced clone, read, branch, edit, test, commit and draft PR #1 in the demo repo, with GitHub Actions green. Seven writes paused for approval; the test harness answered them. The model was Gemini (Nova quota is still 0).
 - Tests: 16 Git/CI tests pass (new: exact-text edit, wrong-count patch, path confinement on the read tools).
 - Still not deployed: the Git/CI server runs locally until per-user sign-in exists.
+
+## 2026-10-01 (Per-user sign-in for the agent)
+
+- GitHub OAuth sign-in (`/auth/github/login`, `/auth/github/callback`, `/auth/me`). Identity only: no scopes requested. The API returns a short-lived HMAC-signed token in the URL fragment; the frontend keeps it in sessionStorage and sends `Authorization: Bearer`. There is no user table.
+- Agent endpoints: read-only tools stay open to everyone. Tools that change things are hidden from the model and refused unless the caller is signed in and on `AUTH_ALLOWED_LOGINS` (empty = nobody), and only the conversation's owner can approve; declining is always allowed. `AGENT_ALLOW_ANONYMOUS_WRITES` re-opens writes for the local demo only (default off).
+- The OAuth `state` is signed, expires in 10 minutes and is bound to the browser by an httponly cookie, so a forged callback cannot sign anyone in.
+- `/alexa` shows sign-in, sign-out and a read-only notice. Tests: 25 new in `backend/tests/test_auth.py` (tokens, OAuth round trip with GitHub mocked, 401/403 paths, owner-only approval, planner read-only paths).
+- Needs from the operator before it works on the hosted stack: a GitHub OAuth App and the `AUTH_*` values on Render. Until then the hosted agent is read-only.

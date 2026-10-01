@@ -69,6 +69,10 @@ class MissionStateError(Exception):
     """The mission is not in a state that allows the requested operation."""
 
 
+class WriteNotAllowed(Exception):
+    """The caller may read, but may not run tools that change things."""
+
+
 class DecisionError(Exception):
     """The model's reply is not a usable decision. The message is fed back to the model."""
 
@@ -122,12 +126,18 @@ def _render_steps(steps: List[MissionStep], limit: int) -> List[str]:
 
 
 def build_prompt(mission: Mission, catalog: List[ToolSpec], history: List[Mission],
-                 remaining: int, feedback: Optional[str] = None) -> str:
+                 remaining: int, feedback: Optional[str] = None, read_only: bool = False) -> str:
     lines = ["## Tools ( * = required argument )"]
     for spec in catalog:
         gate = "needs approval" if spec.requires_approval else "auto"
         lines.append(f"- {spec.name} [{gate}]: {_clip(' '.join(spec.description.split()), TOOL_DESCRIPTION_CHARS)}")
         lines.append(f"  arguments: {_render_arguments(spec.input_schema)}")
+
+    if read_only:
+        lines.append(
+            "\nThe user is not signed in, so tools that change things are not available. "
+            "If they ask for a change (edit, commit, pull request, email), say that signing in is needed first."
+        )
 
     if history:
         lines.append("\n## Earlier in this conversation")
@@ -197,13 +207,17 @@ class MissionPlanner:
     _locks: Dict[str, asyncio.Lock] = {}
 
     def __init__(self, registry: ToolRegistry, store: MissionStore = mission_store,
-                 max_steps: Optional[int] = None, on_event: Optional[EventSink] = None):
+                 max_steps: Optional[int] = None, on_event: Optional[EventSink] = None,
+                 can_write: bool = True):
+        # can_write=False hides every tool that needs approval, and refuses to run one. The HTTP
+        # layer decides it from who is signed in; library callers (tests, scripts) default to True.
+        self.can_write = can_write
         self.registry = registry
         self.store = store
         self._on_event = on_event
         self.max_steps = int(max_steps if max_steps is not None else getattr(settings, "AGENT_MAX_STEPS", 6))
 
-    async def start(self, utterance: str, session_id: Optional[str] = None) -> Mission:
+    async def start(self, utterance: str, session_id: Optional[str] = None, owner: Optional[str] = None) -> Mission:
         """
         Run a new mission. ``session_id`` must be a session the caller has already proven it
         owns; with none, a new session is created and its one-time token is set on the
@@ -211,7 +225,7 @@ class MissionPlanner:
         """
         token = None
         if session_id is None:
-            session_id, token = await self.store.create_session()
+            session_id, token = await self.store.create_session(owner=owner)
         now = datetime.now(timezone.utc)
         mission = Mission(
             id=uuid.uuid4().hex,
@@ -229,6 +243,8 @@ class MissionPlanner:
         return await self._advance(mission)
 
     async def resolve_approval(self, mission_id: str, approved: bool, reason: Optional[str] = None) -> Mission:
+        if approved and not self.can_write:
+            raise WriteNotAllowed("Sign in with an allowed account to approve actions that change things.")
         lock = self._locks.setdefault(mission_id, asyncio.Lock())
         try:
             async with lock:
@@ -268,6 +284,9 @@ class MissionPlanner:
         return mission
 
     async def _execute(self, step: MissionStep) -> None:
+        if step.requires_approval and not self.can_write:  # defence in depth; the gate refuses first
+            step.status, step.error = StepStatus.FAILED, "signing in is required to run this"
+            return
         await self._emit("tool_start", {"index": step.index, "tool": step.tool, "arguments": step.arguments})
         try:
             step.result = await self.registry.call(step.tool, step.arguments)
@@ -283,6 +302,8 @@ class MissionPlanner:
     async def _advance(self, mission: Mission) -> Mission:
         """Run the decision loop until the mission finishes, fails, or reaches an approval gate."""
         catalog = await self.registry.catalog()
+        if not self.can_write:
+            catalog = [spec for spec in catalog if not spec.requires_approval]
         if not catalog:
             return await self._fail(mission, "no tools are reachable", "I can't reach my tools right now.")
         history = await self.store.recent(mission.session_id, MEMORY_MISSIONS, exclude=mission.id)
@@ -290,7 +311,7 @@ class MissionPlanner:
         invalid, feedback = 0, None
         while True:
             remaining = self.max_steps - len(mission.steps)
-            prompt = build_prompt(mission, catalog, history, remaining, feedback)
+            prompt = build_prompt(mission, catalog, history, remaining, feedback, read_only=not self.can_write)
             await self._emit("thinking", {"step": len(mission.steps) + 1})
             reply = await LLMTriageEngine.query_llm_with_provenance(
                 prompt, system_prompt=PLANNER_SYSTEM_PROMPT, temperature=0.1

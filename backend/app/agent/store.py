@@ -80,11 +80,18 @@ class MissionStore:
             self._sessions.popitem(last=False)
         await set_cached_json(_session_key(session_id), record, ttl_seconds=self._ttl())
 
-    async def create_session(self) -> Tuple[str, str]:
-        """Start a conversation. Returns ``(session_id, token)``; the token is shown only here."""
+    async def create_session(self, owner: Optional[str] = None) -> Tuple[str, str]:
+        """
+        Start a conversation. Returns ``(session_id, token)``; the token is shown only here.
+        ``owner`` is the signed-in user's login, when there is one.
+        """
         session_id, token = uuid.uuid4().hex, secrets.token_urlsafe(32)
-        await self._save_session(session_id, {"token_hash": _hash(token), "missions": []})
+        await self._save_session(session_id, {"token_hash": _hash(token), "missions": [], "owner": owner})
         return session_id, token
+
+    async def session_owner(self, session_id: str) -> Optional[str]:
+        record = await self._session(session_id)
+        return (record or {}).get("owner")
 
     async def check_session(self, session_id: str, token: Optional[str]) -> bool:
         record = await self._session(session_id)

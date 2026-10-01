@@ -5,6 +5,10 @@ Ownership: a conversation is a session, and starting one returns a secret ``sess
 exactly once. Every later read or approval must send it as ``X-Session-Token``; a mission id
 alone grants nothing. A mission that is not yours answers 404, same as one that does not exist.
 
+Sign-in: anyone may run read-only tools. A tool that changes things is hidden from, and refused
+to, anyone who is not signed in as an allowed GitHub login (``Authorization: Bearer ...``, see
+``/auth``), and only the user who started a conversation may approve its changes.
+
 Each mission endpoint has a ``/stream`` twin that answers with Server-Sent Events, so a voice
 or web client can show progress ("searching...", "analysing...") instead of waiting for a
 minute of silence. Events: ``mission_started``, ``thinking``, ``step``, ``tool_start``,
@@ -17,7 +21,7 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
-from app.agent.planner import EventSink, MissionNotFound, MissionPlanner, MissionStateError
+from app.agent.planner import EventSink, MissionNotFound, MissionPlanner, MissionStateError, WriteNotAllowed
 from app.agent.store import mission_store
 from app.agent.tools import AgentConfigError, ToolRegistry, configured_registry
 from app.config import settings
@@ -29,6 +33,7 @@ from app.schemas.agent import (
     MissionCreateRequest,
     MissionStatus,
 )
+from app.security.auth import AuthUser, may_write, optional_user
 from app.security.rate_limiter import limiter
 
 logger = logging.getLogger("gitscout.agent")
@@ -73,6 +78,27 @@ async def _session_for(req: MissionCreateRequest, token: Optional[str]) -> Optio
     if not await mission_store.check_session(req.session_id, token):
         raise HTTPException(status_code=403, detail="Unknown session, or a missing or wrong X-Session-Token.")
     return req.session_id
+
+
+async def _can_write(user: Optional[AuthUser], session_id: Optional[str]) -> bool:
+    """May this caller run tools that change things in this conversation?"""
+    if settings.AGENT_ALLOW_ANONYMOUS_WRITES:
+        return True
+    if not may_write(user) or user is None:
+        return False
+    if session_id is None:  # a new conversation will belong to this user
+        return True
+    owner = await mission_store.session_owner(session_id)
+    return owner is not None and owner.lower() == user.login.lower()
+
+
+async def _require_write_rights(user: Optional[AuthUser], mission: Mission) -> None:
+    """Approving a change needs a signed-in, allowed user who owns the conversation."""
+    if await _can_write(user, mission.session_id):
+        return
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in to approve this.", headers={"WWW-Authenticate": "Bearer"})
+    raise HTTPException(status_code=403, detail="This account may not approve changes in this conversation.")
 
 
 def _sse(event: str, data: Dict[str, Any]) -> str:
@@ -136,7 +162,7 @@ async def list_tools():
 @limiter.limit(_mission_rate_limit)
 async def create_mission(
     request: Request, response: Response, req: MissionCreateRequest,
-    x_session_token: Optional[str] = Header(None),
+    x_session_token: Optional[str] = Header(None), user: Optional[AuthUser] = Depends(optional_user),
 ):
     """
     Plan and run a spoken request. Returns once the mission completes, fails, or reaches a
@@ -145,18 +171,24 @@ async def create_mission(
     """
     registry = _registry()
     session_id = await _session_for(req, x_session_token)
-    return await MissionPlanner(registry).start(req.utterance, session_id)
+    planner = MissionPlanner(registry, can_write=await _can_write(user, session_id))
+    return await planner.start(req.utterance, session_id, owner=user.login if user else None)
 
 
 @router.post("/missions/stream", summary="Start a Mission (Server-Sent Events)")
 @limiter.limit(_mission_rate_limit)
 async def create_mission_stream(
     request: Request, req: MissionCreateRequest, x_session_token: Optional[str] = Header(None),
+    user: Optional[AuthUser] = Depends(optional_user),
 ):
     """Same as ``POST /missions``, streaming progress events; the last event is the mission."""
     registry = _registry()
     session_id = await _session_for(req, x_session_token)
-    return _stream(lambda sink: MissionPlanner(registry, on_event=sink).start(req.utterance, session_id))
+    can_write = await _can_write(user, session_id)
+    owner = user.login if user else None
+    return _stream(
+        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write).start(req.utterance, session_id, owner)
+    )
 
 
 @router.get("/missions/{mission_id}", response_model=Mission, summary="Get a Mission")
@@ -168,14 +200,19 @@ async def get_mission(mission: Mission = Depends(_owned_mission)):
 @limiter.limit(_mission_rate_limit)
 async def resolve_approval(
     request: Request, response: Response, req: ApprovalRequest,
-    mission: Mission = Depends(_owned_mission),
+    mission: Mission = Depends(_owned_mission), user: Optional[AuthUser] = Depends(optional_user),
 ):
     """
     Answer a mission's approval gate. Approving runs the pending tool with the arguments
     shown in the mission's last step; rejecting skips it. Either way the mission continues.
     """
+    if req.approved:
+        await _require_write_rights(user, mission)
     try:
-        return await MissionPlanner(_registry()).resolve_approval(mission.id, req.approved, req.reason)
+        planner = MissionPlanner(_registry(), can_write=await _can_write(user, mission.session_id))
+        return await planner.resolve_approval(mission.id, req.approved, req.reason)
+    except WriteNotAllowed as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     except MissionNotFound:
         raise HTTPException(status_code=404, detail=f"Mission '{mission.id}' not found.")
     except MissionStateError as exc:
@@ -186,11 +223,17 @@ async def resolve_approval(
 @limiter.limit(_mission_rate_limit)
 async def resolve_approval_stream(
     request: Request, req: ApprovalRequest, mission: Mission = Depends(_owned_mission),
+    user: Optional[AuthUser] = Depends(optional_user),
 ):
     """Same as the approval endpoint, streaming progress events; the last event is the mission."""
     registry = _registry()
     if mission.status != MissionStatus.AWAITING_APPROVAL:
         raise HTTPException(status_code=409, detail=f"mission is '{mission.status.value}', not awaiting approval")
+    if req.approved:
+        await _require_write_rights(user, mission)
+    can_write = await _can_write(user, mission.session_id)
     return _stream(
-        lambda sink: MissionPlanner(registry, on_event=sink).resolve_approval(mission.id, req.approved, req.reason)
+        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write).resolve_approval(
+            mission.id, req.approved, req.reason
+        )
     )

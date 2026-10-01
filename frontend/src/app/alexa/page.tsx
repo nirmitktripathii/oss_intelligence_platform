@@ -3,6 +3,8 @@
 import * as React from 'react';
 import {
   AlertTriangle,
+  LogIn,
+  LogOut,
   Mic,
   Pause,
   RotateCcw,
@@ -18,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { MiniMarkdown } from '@/components/alexa/mini-markdown';
 import { StepTimeline } from '@/components/alexa/step-timeline';
 import { useAgentSession, type Turn } from '@/hooks/use-agent-session';
+import { useAuth } from '@/hooks/use-auth';
 import { useSpeech } from '@/hooks/use-speech';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +44,7 @@ export default function AlexaPage() {
   const speechRef = React.useRef<(text: string) => void>(() => {});
   const agent = useAgentSession({ onSpeech: (t) => speechRef.current(t) });
   const { turns, busy, send, decide, stop, reset } = agent;
+  const auth = useAuth();
 
   const latest = turns[turns.length - 1];
   const awaiting = latest && pendingStep(latest) ? latest : undefined;
@@ -92,7 +96,34 @@ export default function AlexaPage() {
           <h1 className="text-sm font-bold tracking-tight">Alexa+ simulator</h1>
           <Badge variant="outline">Developer Mission Control</Badge>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {!auth.loading && auth.me.signed_in && (
+            <>
+              <Badge variant="outline" className="gap-1" title={auth.me.can_write ? 'May approve changes' : 'Read-only: this account is not on the allow-list'}>
+                @{auth.me.login}
+                {!auth.me.can_write && <span className="text-muted-foreground">read-only</span>}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 text-xs text-muted-foreground"
+                onClick={() => {
+                  speech.stopSpeaking();
+                  auth.signOut();
+                  reset(); // the conversation belonged to the signed-in user
+                }}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Sign out
+              </Button>
+            </>
+          )}
+          {!auth.loading && !auth.me.signed_in && auth.me.sign_in_available && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={auth.signIn}>
+              <LogIn className="h-3.5 w-3.5" />
+              Sign in with GitHub
+            </Button>
+          )}
           {speech.canSpeak && (
             <Button
               variant="ghost"
@@ -120,6 +151,24 @@ export default function AlexaPage() {
           </Button>
         </div>
       </div>
+
+      {auth.error && (
+        <div className="flex items-start justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive" role="alert">
+          <span>{auth.error}</span>
+          <button type="button" className="underline" onClick={auth.dismissError}>
+            Dismiss
+          </button>
+        </div>
+      )}
+      {!auth.loading && !auth.me.can_write && (
+        <p className="rounded-md border border-border bg-card/60 px-3 py-2 text-xs text-muted-foreground">
+          {auth.me.signed_in
+            ? 'Read-only: this account is not on the allow-list, so the assistant can look things up but cannot change anything.'
+            : auth.me.sign_in_available
+              ? 'Read-only: the assistant can look things up. Sign in with GitHub to let it make changes (edits, commits, pull requests), each one still needing your approval.'
+              : 'Read-only: the assistant can look things up. Changes are disabled on this deployment.'}
+        </p>
+      )}
 
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Conversation */}
