@@ -27,3 +27,15 @@ def test_tools_have_descriptions():
     tools = asyncio.run(mcp.list_tools())
     for t in tools:
         assert t.description and t.description.strip(), f"{t.name} is missing a description"
+
+
+def test_filter_values_are_normalised_to_backend_enums():
+    from gitscout_mcp.server import _DIFFICULTIES, _DOMAINS, _canon
+
+    for given in ("ai_ml", "AI/ML", "ai", "ML", "ai-ml"):
+        assert _canon(given, _DOMAINS) == "AI/ML"
+    assert _canon("cloud/devops", _DOMAINS) == "Cloud/DevOps"
+    assert _canon("beginner", _DIFFICULTIES) == "Easy"
+    assert _canon("Hard", _DIFFICULTIES) == "Hard"
+    assert _canon(None, _DOMAINS) is None
+    assert _canon("nonsense", _DOMAINS) == "nonsense"
