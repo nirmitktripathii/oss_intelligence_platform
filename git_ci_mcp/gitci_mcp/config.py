@@ -16,6 +16,10 @@ class Settings:
     host: str = os.getenv("MCP_HOST", "127.0.0.1")
     port: int = int(os.getenv("MCP_PORT", "9100"))
 
+    # Shared secret the agent backend must present (Authorization: Bearer ...). Required whenever the
+    # server listens beyond localhost; see gitci_mcp/auth.py.
+    mcp_token: str = os.getenv("GITCI_MCP_TOKEN", "")
+
     # Every sandbox is a directory under this root; nothing outside it is ever touched.
     sandbox_root: str = os.getenv("GITCI_SANDBOX_ROOT", os.path.join(tempfile.gettempdir(), "gitci-sandboxes"))
     max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "3"))

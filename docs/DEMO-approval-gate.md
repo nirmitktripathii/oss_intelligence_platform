@@ -83,3 +83,19 @@ One-time setup:
 3. Open `/alexa`, click "Sign in with GitHub".
 
 The OAuth app asks for no scopes (public profile only): it proves who you are and nothing more.
+
+## Hosted Git/CI server (Render)
+
+The hosted agent can only change things if the Git/CI MCP server is deployed and registered.
+
+1. **Token for the server.** Make a random access token, as for `AUTH_SECRET`:
+   `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set the same value as
+   `GITCI_MCP_TOKEN` on the `gitci-mcp` service and on `gitscout-api`. Without it the server refuses
+   to start, and every request without it gets a 401, so nobody can reach the tools except the agent
+   backend (which sits behind sign-in and the approval gate).
+2. **GitHub token for the server.** A fine-grained token limited to `gitscout-demo-sandbox` (Contents
+   and Pull requests read/write, Metadata read), short expiry. Set it as `GITHUB_TOKEN` on `gitci-mcp`.
+3. **Allow-list.** `GITCI_ALLOWED_OWNERS` names the only accounts whose repos can be cloned or tested
+   (it runs their tests on the server). Keep it to accounts you control.
+4. `gitscout-api` lists the server in `AGENT_MCP_SERVERS` with `"bearer_env": "GITCI_MCP_TOKEN"`:
+   the token is read from the environment, never from that JSON.

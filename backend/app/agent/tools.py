@@ -13,7 +13,9 @@ for this, so a newly added or renamed tool can never start running unattended.
 
 import json
 import logging
+import os
 import re
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Protocol
@@ -22,6 +24,7 @@ from app.config import settings
 logger = logging.getLogger("gitscout.agent")
 
 _SERVER_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+_ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
 class ToolError(Exception):
@@ -48,6 +51,41 @@ class ToolSource(Protocol):
     async def call_tool(self, tool: str, arguments: Dict[str, Any]) -> Any: ...
 
 
+class _BearerTransport:
+    """
+    Streamable HTTP transport that sends ``Authorization: Bearer <token>``. Single use, like the
+    client that opens it. The token is read from the named environment variable when the
+    connection opens, so it never sits in AGENT_MCP_SERVERS (which is not a secret).
+    """
+
+    def __init__(self, url: str, token_env: str):
+        self._url, self._token_env = url, token_env
+        self._stack: Optional[AsyncExitStack] = None
+
+    async def __aenter__(self):
+        from mcp.client.streamable_http import streamable_http_client
+        from mcp.shared._httpx_utils import create_mcp_http_client
+
+        token = os.environ.get(self._token_env, "").strip()
+        if not token:
+            raise ToolError(f"the server's access token is not set ({self._token_env})")
+        stack = AsyncExitStack()
+        try:
+            http = await stack.enter_async_context(
+                create_mcp_http_client(headers={"Authorization": f"Bearer {token}"})
+            )
+            streams = await stack.enter_async_context(streamable_http_client(self._url, http_client=http))
+        except BaseException:
+            await stack.aclose()
+            raise
+        self._stack = stack
+        return streams
+
+    async def __aexit__(self, *exc_info):
+        stack, self._stack = self._stack, None
+        return await stack.__aexit__(*exc_info) if stack else None
+
+
 class McpToolSource:
     """
     One MCP server. ``target`` is its Streamable HTTP URL (or, in tests, an in-process
@@ -56,9 +94,10 @@ class McpToolSource:
     """
 
     def __init__(self, name: str, target: Any, auto_approve: Iterable[str] = (),
-                 timeout: Optional[float] = None):
+                 timeout: Optional[float] = None, bearer_env: Optional[str] = None):
         self.name = name
         self._target = target
+        self._bearer_env = bearer_env
         self._auto_approve: FrozenSet[str] = frozenset(auto_approve)
         self._timeout = float(
             timeout if timeout is not None else getattr(settings, "AGENT_TOOL_TIMEOUT_SECONDS", 90.0)
@@ -67,7 +106,8 @@ class McpToolSource:
     def _client(self):
         from mcp import Client  # lazy: only deployments that enable the agent pay the import cost
 
-        return Client(self._target, read_timeout_seconds=self._timeout)
+        target = _BearerTransport(self._target, self._bearer_env) if self._bearer_env else self._target
+        return Client(target, read_timeout_seconds=self._timeout)
 
     async def list_tools(self) -> List[ToolSpec]:
         async with self._client() as client:
@@ -145,7 +185,10 @@ def _parse_servers(raw: str) -> ToolRegistry:
             raise AgentConfigError(f"server {name!r} needs an http(s) url")
         if not isinstance(auto_approve, list) or not all(isinstance(t, str) for t in auto_approve):
             raise AgentConfigError(f"server {name!r}: auto_approve must be a list of tool names")
-        sources.append(McpToolSource(name, url, auto_approve))
+        bearer_env = entry.get("bearer_env")
+        if bearer_env is not None and not (isinstance(bearer_env, str) and _ENV_NAME_RE.match(bearer_env)):
+            raise AgentConfigError(f"server {name!r}: bearer_env must be an environment variable name")
+        sources.append(McpToolSource(name, url, auto_approve, bearer_env=bearer_env))
     return ToolRegistry(sources)
 
 

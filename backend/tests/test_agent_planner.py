@@ -561,3 +561,77 @@ def test_planner_prompt_tells_the_model_the_request_may_be_misheard_speech():
     assert "speech recognition" in PLANNER_SYSTEM_PROMPT
     assert "Ollama" in PLANNER_SYSTEM_PROMPT
     assert "Never invent an issue id" in PLANNER_SYSTEM_PROMPT
+
+
+# ── Authenticated MCP server ──────────────────────────────────────────────── #
+
+
+@pytest.fixture
+def bearer_server():
+    """A real Streamable HTTP MCP server that answers 401 unless the right bearer token is sent."""
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    seen: List[bytes] = []
+    inner = _mcp_server().streamable_http_app(host="127.0.0.1")
+
+    async def guarded(scope, receive, send):
+        if scope["type"] == "http":
+            auth = dict(scope["headers"]).get(b"authorization", b"")
+            seen.append(auth)
+            if auth != b"Bearer s3cret-token-for-tests":
+                await send({"type": "http.response.start", "status": 401, "headers": []})
+                await send({"type": "http.response.body", "body": b""})
+                return
+        await inner(scope, receive, send)
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(guarded, host="127.0.0.1", port=port, log_level="error"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.05)
+    yield f"http://127.0.0.1:{port}/mcp", seen
+    server.should_exit = True
+    thread.join(timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_mcp_source_sends_the_bearer_token_from_the_environment(bearer_server, monkeypatch):
+    url, seen = bearer_server
+    monkeypatch.setenv("DEMO_MCP_TOKEN", "s3cret-token-for-tests")
+
+    source = McpToolSource("demo", url, auto_approve=["lookup"], bearer_env="DEMO_MCP_TOKEN")
+
+    assert "demo.lookup" in {s.name for s in await source.list_tools()}
+    assert await source.call_tool("lookup", {"issue_id": "a/b#1"}) == {"id": "a/b#1", "verbose": False}
+    assert set(seen) == {b"Bearer s3cret-token-for-tests"}
+
+
+@pytest.mark.asyncio
+async def test_mcp_source_fails_cleanly_without_or_with_a_wrong_token(bearer_server, monkeypatch):
+    url, _ = bearer_server
+    monkeypatch.delenv("DEMO_MCP_TOKEN", raising=False)
+    with pytest.raises(ToolError, match="DEMO_MCP_TOKEN"):
+        await McpToolSource("demo", url, bearer_env="DEMO_MCP_TOKEN").list_tools()
+
+    monkeypatch.setenv("DEMO_MCP_TOKEN", "wrong")
+    registry = ToolRegistry([McpToolSource("demo", url, bearer_env="DEMO_MCP_TOKEN")])
+    assert await registry.catalog() == []  # an unreachable server is skipped, never crashes a mission
+
+
+def test_bearer_env_is_validated(monkeypatch):
+    base = '[{"name": "a", "url": "https://x/mcp", "bearer_env": %s}]'
+    monkeypatch.setattr(app_settings, "AGENT_MCP_SERVERS", base % '"GITCI_MCP_TOKEN"')
+    assert isinstance(agent_tools.configured_registry(), ToolRegistry)
+    for bad in ('"not valid"', "5", '"lower"', '""'):
+        monkeypatch.setattr(app_settings, "AGENT_MCP_SERVERS", base % bad)
+        with pytest.raises(AgentConfigError):
+            agent_tools.configured_registry()

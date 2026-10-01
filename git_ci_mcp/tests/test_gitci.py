@@ -176,3 +176,46 @@ def test_edit_file_exact_match_and_recount_patch(tmp_path):
         assert (await mgr.run_tests(sid, "python -m pytest -q"))["passed"] is True
 
     asyncio.run(flow())
+
+
+# ── Access token in front of the MCP endpoint ─────────────────────────────── #
+
+
+def _asgi_ok():
+    async def app(scope, receive, send):
+        if scope["type"] == "http":
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b"ok"})
+    return app
+
+
+def test_bearer_middleware_only_lets_the_right_token_through():
+    import httpx
+
+    from gitci_mcp.auth import BearerAuthMiddleware
+
+    token = "t" * 40
+    app = BearerAuthMiddleware(_asgi_ok(), token)
+
+    async def call(headers):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client:
+            return await client.post("/mcp", headers=headers)
+
+    assert asyncio.run(call({})).status_code == 401
+    assert asyncio.run(call({"Authorization": "Bearer nope"})).status_code == 401
+    assert asyncio.run(call({"Authorization": token})).status_code == 401  # no scheme
+    assert asyncio.run(call({"Authorization": "Basic " + token})).status_code == 401
+    assert asyncio.run(call({"Authorization": "Bearer " + token})).status_code == 200
+    assert asyncio.run(call({"Authorization": "bearer " + token})).status_code == 200
+
+
+def test_server_refuses_to_listen_publicly_without_a_strong_token():
+    from gitci_mcp.auth import require_token
+
+    require_token("127.0.0.1", "")  # local demo: no token needed
+    require_token("localhost", "")
+    require_token("0.0.0.0", "t" * 40)
+    with pytest.raises(RuntimeError, match="GITCI_MCP_TOKEN is required"):
+        require_token("0.0.0.0", "")
+    with pytest.raises(RuntimeError, match="at least 32"):
+        require_token("0.0.0.0", "short")
