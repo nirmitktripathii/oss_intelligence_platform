@@ -1,12 +1,15 @@
 """
 LLM Semantic Triage & Prompt Engine for GitScout.
 Provides structured prompt engineering, system instructions, and multi-provider LLM invocations
-(OpenAI, Google Gemini, Anthropic, or local Ollama) for root cause analysis, code diff synthesis,
-and standalone bug reproduction generation.
+(Amazon Bedrock, Google Gemini, Groq, OpenAI-compatible, or local Ollama) for root cause analysis,
+code diff synthesis, and standalone bug reproduction generation.
 """
 
+import asyncio
 import json
 import logging
+import time
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 import httpx
 from app.config import settings
@@ -188,6 +191,32 @@ Respond in valid JSON:
 # 3. LLM INVOCATION & ORCHESTRATION PIPELINE
 # ==============================================================================
 
+@lru_cache(maxsize=8)
+def _bedrock_client(profile: Optional[str], region: str, timeout: float):
+    """
+    Cached ``bedrock-runtime`` client per (profile, region, timeout). Clients are
+    thread-safe to call but costly to build, so each is built once. A dedicated
+    Session keeps construction thread-safe and scopes the optional named profile.
+    Auth: boto3 itself picks up AWS_BEARER_TOKEN_BEDROCK (Bedrock API key) from the
+    environment; otherwise the profile's credentials sign the request.
+    """
+    import boto3  # lazy: only deployments that enable Bedrock pay the import cost
+    from botocore.config import Config
+
+    session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+    return session.client(
+        "bedrock-runtime",
+        region_name=region,
+        config=Config(
+            connect_timeout=timeout,
+            read_timeout=timeout,
+            # Adaptive retry absorbs ThrottlingException; the caller's wait_for still
+            # bounds the total so a retry storm can't blow the interactive budget.
+            retries={"max_attempts": 3, "mode": "adaptive"},
+        ),
+    )
+
+
 class LLMTriageEngine:
     """
     Invokes a free-tier-friendly LLM provider as an *enhancement layer* over the
@@ -196,11 +225,17 @@ class LLMTriageEngine:
     deterministic result rather than fabricating one.
     """
 
+    # provider -> time.monotonic() until which it is skipped after a failure (per process).
+    _cooldown_until: Dict[str, float] = {}
+
     # Default model per provider (all reachable on a free tier). Override with LLM_MODEL.
     # Gemini/Gemma default to the free-tier flash-lite; other free Gemma options via the
     # same Gemini API: gemini-3.1-flash-lite, gemma-4-26b-a4b-it, gemma-4-31b-it. Groq's
     # free tier does not carry Llama 3.3, so default to an available general model.
+    # Bedrock defaults to Amazon Nova 2 Lite via its US cross-region inference profile
+    # (first-party, so no Marketplace subscription is needed); override with BEDROCK_MODEL_ID.
     PROVIDER_DEFAULTS: Dict[str, str] = {
+        "bedrock": "us.amazon.nova-2-lite-v1:0",
         "gemini": "gemini-3.5-flash-lite",
         "groq": "openai/gpt-oss-120b",
         "openai": "gpt-4o-mini",
@@ -212,6 +247,13 @@ class LLMTriageEngine:
     # ------------------------------------------------------------------ #
     @classmethod
     def _provider_available(cls, provider: str) -> bool:
+        if provider == "bedrock":
+            # Explicit opt-in only: boto3's default chain would also find unrelated
+            # credentials (e.g. a [default] profile), which must not silently route here.
+            return bool(
+                getattr(settings, "AWS_BEARER_TOKEN_BEDROCK", None)
+                or getattr(settings, "BEDROCK_AWS_PROFILE", None)
+            )
         if provider == "gemini":
             return bool(getattr(settings, "GEMINI_API_KEY", None))
         if provider == "groq":
@@ -227,18 +269,29 @@ class LLMTriageEngine:
         """
         Ordered list of ``(provider, model)`` to attempt. Respects a forced
         ``LLM_PROVIDER`` if set and available, otherwise auto-selects every
-        configured provider (Ollama last, and only when its URL is set — so the
-        old unconditional localhost probe never runs on a deployed backend).
+        configured provider (Bedrock first when configured, Ollama last and only
+        when its URL is set — so the old unconditional localhost probe never runs
+        on a deployed backend).
         """
         if not getattr(settings, "LLM_TRIAGE_ENABLED", True):
             return []
         model_override = getattr(settings, "LLM_MODEL", None)
         forced = (getattr(settings, "LLM_PROVIDER", None) or "").strip().lower()
-        order = [forced] if forced in cls.PROVIDER_DEFAULTS else ["gemini", "groq", "openai", "ollama"]
+        order = (
+            [forced] if forced in cls.PROVIDER_DEFAULTS
+            else ["bedrock", "gemini", "groq", "openai", "ollama"]
+        )
         chain: List[tuple] = []
         for provider in order:
-            if cls._provider_available(provider):
-                chain.append((provider, model_override or cls.PROVIDER_DEFAULTS[provider]))
+            if not cls._provider_available(provider):
+                continue
+            if provider == "bedrock":
+                # Bedrock ids (us.amazon.nova-…) are not interchangeable with the other
+                # providers', so it takes its own override rather than the shared LLM_MODEL.
+                model = getattr(settings, "BEDROCK_MODEL_ID", None) or cls.PROVIDER_DEFAULTS[provider]
+            else:
+                model = model_override or cls.PROVIDER_DEFAULTS[provider]
+            chain.append((provider, model))
         return chain
 
     @classmethod
@@ -333,7 +386,15 @@ class LLMTriageEngine:
             )
             if resp.status_code == 200:
                 data = resp.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                candidate = (data.get("candidates") or [{}])[0]
+                parts = (candidate.get("content") or {}).get("parts") or []
+                text = next((p["text"] for p in parts if isinstance(p, dict) and p.get("text")), None)
+                if text:
+                    return text
+                # A 200 with no text (blocked, truncated, or an empty candidate) is a provider
+                # miss, not a crash: fall through to the next provider.
+                logger.warning("[LLM] gemini returned no text (finishReason=%s)", candidate.get("finishReason"))
+                return None
             # Body carries the real reason (bad model, quota, auth) — truncate to stay log-safe.
             logger.warning("[LLM] gemini returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None
@@ -364,6 +425,38 @@ class LLMTriageEngine:
             logger.warning("[LLM] ollama returned HTTP %s: %s", resp.status_code, resp.text[:500])
         return None
 
+    @classmethod
+    async def _call_bedrock(
+        cls, model: str, system_prompt: str, prompt: str, temperature: float,
+        timeout: Optional[float] = None,
+    ) -> Optional[str]:
+        if not cls._provider_available("bedrock"):
+            return None
+        timeout = float(timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT_SECONDS", 20.0))
+        max_tokens = int(getattr(settings, "BEDROCK_MAX_TOKENS", 4096))
+        profile = getattr(settings, "BEDROCK_AWS_PROFILE", None)
+        region = getattr(settings, "BEDROCK_REGION", "us-east-1")
+
+        def _converse() -> Dict[str, Any]:
+            client = _bedrock_client(profile, region, timeout)
+            return client.converse(
+                modelId=model,
+                system=[{"text": system_prompt}],
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
+            )
+
+        # boto3 is synchronous: run it off the event loop, bounded by the same budget as the
+        # other providers so a slow call still falls through to the next one in the chain.
+        # Errors (AccessDenied, Throttling, ValidationException) propagate to the
+        # orchestrator, which logs them by type and moves on.
+        resp = await asyncio.wait_for(asyncio.to_thread(_converse), timeout=timeout)
+        if resp.get("stopReason") == "max_tokens":
+            logger.warning("[LLM] bedrock output hit BEDROCK_MAX_TOKENS=%s and may be truncated", max_tokens)
+        # Content can carry non-text blocks (e.g. reasoningContent); keep only the text.
+        blocks = resp.get("output", {}).get("message", {}).get("content", [])
+        return "".join(b["text"] for b in blocks if "text" in b) or None
+
     # ------------------------------------------------------------------ #
     # Orchestration
     # ------------------------------------------------------------------ #
@@ -381,9 +474,16 @@ class LLMTriageEngine:
         ``timeout`` overrides LLM_TIMEOUT_SECONDS for this call (used by the lenient
         background summarizer).
         """
-        for provider, model in cls.resolve_chain():
+        chain = cls.resolve_chain()
+        cooldown = float(getattr(settings, "LLM_PROVIDER_COOLDOWN_SECONDS", 0) or 0)
+        for position, (provider, model) in enumerate(chain):
+            # Skip a provider that just failed, unless it is the last one left to try.
+            if cooldown > 0 and position < len(chain) - 1 and time.monotonic() < cls._cooldown_until.get(provider, 0.0):
+                continue
             try:
-                if provider in ("openai", "groq"):
+                if provider == "bedrock":
+                    text = await cls._call_bedrock(model, system_prompt, prompt, temperature, timeout)
+                elif provider in ("openai", "groq"):
                     text = await cls._call_openai_compatible(provider, model, system_prompt, prompt, temperature, timeout)
                 elif provider == "gemini":
                     text = await cls._call_gemini(model, system_prompt, prompt, temperature, timeout)
@@ -397,6 +497,8 @@ class LLMTriageEngine:
                 # %r so transport errors with an empty str() (httpx ReadTimeout/ConnectTimeout,
                 # which render as "") still name their type — otherwise prod is undiagnosable.
                 logger.warning("[LLM] %s invocation failed: %r", provider, exc)
+                if cooldown > 0:
+                    cls._cooldown_until[provider] = time.monotonic() + cooldown
         return None
 
     @classmethod

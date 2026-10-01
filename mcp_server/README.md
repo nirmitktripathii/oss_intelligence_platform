@@ -50,6 +50,12 @@ For production hosting, serve the ASGI app instead:
 uvicorn "gitscout_mcp.server:create_app" --factory --host 0.0.0.0 --port 9000
 ```
 
+Set `MCP_HOST=0.0.0.0` when serving under a public hostname. The SDK only enforces its
+localhost-only `Host` header allowlist when bound to loopback, so a loopback bind answers a
+real hostname with `421 Misdirected Request`. The Render blueprint (`deploy/render.yaml`,
+service `gitscout-mcp`) already does this, and the backend's agent planner connects to it via
+`AGENT_MCP_SERVERS`.
+
 ## Connect a client
 
 **Claude Code:**

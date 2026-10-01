@@ -61,10 +61,13 @@ class Settings(BaseSettings):
     # Providers are free-tier friendly: Google Gemini / Gemma, Groq, any
     # OpenAI-compatible endpoint, or a local Ollama for development only.
     LLM_TRIAGE_ENABLED: bool = True          # master switch; False => always AST-only
-    LLM_PROVIDER: Optional[str] = None       # force one of: gemini|groq|openai|ollama (else auto)
+    LLM_PROVIDER: Optional[str] = None       # force one of: bedrock|gemini|groq|openai|ollama (else auto)
     LLM_MODEL: Optional[str] = None          # override the per-provider default model id
     LLM_TIMEOUT_SECONDS: float = 30.0        # interactive triage synthesis call budget
     LLM_CACHE_TTL_SECONDS: int = 604800      # persist an enrichment for 7 days in Redis
+    # After a provider raises, skip it for this long (when another provider is available) so a
+    # broken one (expired key, zero quota) costs one slow call per window, not one per request.
+    LLM_PROVIDER_COOLDOWN_SECONDS: float = 120.0
 
     # Long issue descriptions: bodies up to this many characters are fed to the AI
     # verbatim. A longer body is condensed ONCE at index time by a single fast
@@ -93,6 +96,22 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     OLLAMA_BASE_URL: Optional[str] = None     # e.g. http://localhost:11434 — local dev only, never on Render
 
+    # Amazon Bedrock (AWS-native provider, Converse API). Enabled by EITHER credential:
+    #   - AWS_BEARER_TOKEN_BEDROCK: a Bedrock API key (deploys, e.g. Render). boto3 reads it
+    #     straight from the environment — the app never passes the key around itself.
+    #   - BEDROCK_AWS_PROFILE: a named AWS CLI profile (local dev, e.g. after `aws login`).
+    # Model ids are account/region specific: list them with
+    #   aws bedrock list-inference-profiles --region us-east-1
+    # BEDROCK_MODEL_ID is Bedrock's own override; the shared LLM_MODEL is deliberately NOT
+    # applied here, because a Gemini/Groq model id set for the fallbacks is invalid on Bedrock.
+    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
+    BEDROCK_AWS_PROFILE: Optional[str] = None
+    BEDROCK_REGION: str = "us-east-1"
+    BEDROCK_MODEL_ID: Optional[str] = None     # default: us.amazon.nova-2-lite-v1:0
+    # Always sent explicitly: an unset maxTokens makes Bedrock reserve the model's full output
+    # quota per call, which surfaces as spurious ThrottlingException under load.
+    BEDROCK_MAX_TOKENS: int = 4096
+
     # Real-code grounding: fetch the localized file's actual source (GitHub Contents API,
     # reuses GITHUB_TOKEN) and feed it to the LLM so diagnoses are grounded, not guessed.
     LLM_GROUND_IN_SOURCE: bool = True
@@ -108,6 +127,19 @@ class Settings(BaseSettings):
     LLM_CONTRIBUTING: bool = True             # summarize the repo's REAL CONTRIBUTING guide
     LLM_CONTRIBUTING_MAX_CHARS: int = 6000    # bound the guide text fed to the summarizer
     CONTRIBUTING_CACHE_TTL_SECONDS: int = 604800  # cache a repo's CONTRIBUTING guide for 7 days
+
+    # ── Agent planner (Developer Mission Control) ──
+    # The planner reasons through the LLM chain above and acts only through MCP servers.
+    # Unset => the /agent endpoints answer 503 and nothing else changes. JSON list, e.g.
+    #   [{"name": "gitscout", "url": "http://127.0.0.1:9000/mcp",
+    #     "auto_approve": ["search_issues", "get_issue", "analyze_issue"]}]
+    # A tool NOT listed in its server's auto_approve pauses for the user's confirmation,
+    # so list only read-only tools there.
+    AGENT_MCP_SERVERS: Optional[str] = None
+    AGENT_MAX_STEPS: int = 6                  # tool calls per mission before it must answer
+    AGENT_TOOL_TIMEOUT_SECONDS: float = 90.0  # per MCP call; triage tools may invoke an LLM
+    AGENT_MISSION_TTL_SECONDS: int = 86400    # how long a mission (and its session) is kept
+    AGENT_RATE_LIMIT: str = "10/minute"       # per client, on starting and approving missions
 
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
