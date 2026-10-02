@@ -134,6 +134,21 @@ export function ApprovalPreview({ step, history }: { step: LiveStep; history: Mi
         </>
       );
       break;
+    case 'send_email':
+      body = (
+        <>
+          <Row label="To">The email address you confirmed</Row>
+          <Row label="Subject">{capped(str(a.subject).trim(), 150) || '(no subject)'}</Row>
+          <pre className="whitespace-pre-wrap break-words rounded border border-border bg-background/70 p-2 text-[11px] leading-relaxed text-foreground">
+            {capped(str(a.body).trim(), 4000) || '(empty)'}
+          </pre>
+          <p className="text-[11px] text-muted-foreground">
+            Plain text, one recipient. A short note saying an AI wrote it is added at the end. It goes to the address you
+            confirmed; the assistant cannot choose another.
+          </p>
+        </>
+      );
+      break;
     default:
       body = null;
   }

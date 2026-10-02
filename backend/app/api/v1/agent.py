@@ -38,6 +38,7 @@ from app.schemas.agent import (
 from app.security.auth import AuthUser, may_write, optional_user
 from app.security.rate_limiter import limiter
 from app.telegram_link import service as telegram_links
+from app.email_link import service as email_links
 
 logger = logging.getLogger("gitscout.agent")
 
@@ -104,6 +105,13 @@ async def _report_chat(db: AsyncSession, user: Optional[AuthUser], can_write: bo
     if not can_write or user is None:
         return None
     return await telegram_links.chat_for(db, user.login)
+
+
+async def _email_to(db: AsyncSession, user: Optional[AuthUser], can_write: bool) -> Optional[str]:
+    """The address this signed-in user confirmed, for ``send_email``; ``None`` if there is none. Same rules as above."""
+    if not can_write or user is None:
+        return None
+    return await email_links.address_for(db, user.login)
 
 
 async def _require_write_rights(user: Optional[AuthUser], mission: Mission) -> None:
@@ -187,7 +195,10 @@ async def create_mission(
     registry = _registry()
     session_id = await _session_for(req, x_session_token)
     can_write = await _can_write(user, session_id)
-    planner = MissionPlanner(registry, can_write=can_write, report_chat_id=await _report_chat(db, user, can_write))
+    planner = MissionPlanner(
+        registry, can_write=can_write, report_chat_id=await _report_chat(db, user, can_write),
+        email_to=await _email_to(db, user, can_write),
+    )
     return await planner.start(req.utterance, session_id, owner=user.login if user else None)
 
 
@@ -202,11 +213,12 @@ async def create_mission_stream(
     session_id = await _session_for(req, x_session_token)
     can_write = await _can_write(user, session_id)
     report_chat = await _report_chat(db, user, can_write)
+    email_to = await _email_to(db, user, can_write)
     owner = user.login if user else None
     return _stream(
-        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write, report_chat_id=report_chat).start(
-            req.utterance, session_id, owner
-        )
+        lambda sink: MissionPlanner(
+            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to
+        ).start(req.utterance, session_id, owner)
     )
 
 
@@ -231,7 +243,8 @@ async def resolve_approval(
     try:
         can_write = await _can_write(user, mission.session_id)
         planner = MissionPlanner(
-            _registry(), can_write=can_write, report_chat_id=await _report_chat(db, user, can_write)
+            _registry(), can_write=can_write, report_chat_id=await _report_chat(db, user, can_write),
+            email_to=await _email_to(db, user, can_write),
         )
         return await planner.resolve_approval(mission.id, req.approved, req.reason)
     except WriteNotAllowed as exc:
@@ -256,8 +269,9 @@ async def resolve_approval_stream(
         await _require_write_rights(user, mission)
     can_write = await _can_write(user, mission.session_id)
     report_chat = await _report_chat(db, user, can_write)
+    email_to = await _email_to(db, user, can_write)
     return _stream(
-        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write, report_chat_id=report_chat).resolve_approval(
-            mission.id, req.approved, req.reason
-        )
+        lambda sink: MissionPlanner(
+            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to
+        ).resolve_approval(mission.id, req.approved, req.reason)
     )

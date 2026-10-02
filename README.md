@@ -490,7 +490,8 @@ flowchart LR
 > and every destination is validated for its channel. A channel without credentials answers
 > `not_configured` instead of claiming delivery. The agent's own Telegram report (`send_report` on the
 > Git/CI server) is separate: each signed-in user links their own Telegram chat on `/alexa` and gets
-> their own reports (see `docs/DEMO-approval-gate.md`).
+> their own reports (see `docs/DEMO-approval-gate.md`). Likewise `send_email` (Email Orchestrator, demo
+> mailbox) goes only to an address the signed-in user confirmed with an emailed code, after an approval.
 
 ### 1. Telegram Bot Integration
 - **Interactive Inline Buttons**: Every Telegram alert includes direct callback buttons: `[🚀 View in GitScout]`, `[🔍 AI Fix Plan]`, and `[💰 Claim Bounty]`.
