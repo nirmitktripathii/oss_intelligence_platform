@@ -483,6 +483,14 @@ flowchart LR
     Filter --> WA[Twilio WhatsApp Pro]
 ```
 
+> **Status.** The adapters, subscriptions and matching rules are implemented and tested, and the
+> test-message endpoint sends for real when a channel has credentials. Nothing yet calls the router
+> when a new issue is indexed, so alerts are not broadcast automatically. Sending a test message, and
+> listing or removing subscriptions, need a signed-in account; subscribing is open but rate limited
+> and every destination is validated for its channel. A channel without credentials answers
+> `not_configured` instead of claiming delivery. The agent's own Telegram report (`send_report` on the
+> Git/CI server) is separate: see `docs/DEMO-approval-gate.md`.
+
 ### 1. Telegram Bot Integration
 - **Interactive Inline Buttons**: Every Telegram alert includes direct callback buttons: `[🚀 View in GitScout]`, `[🔍 AI Fix Plan]`, and `[💰 Claim Bounty]`.
 - **Setup**:
