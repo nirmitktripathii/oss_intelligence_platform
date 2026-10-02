@@ -76,15 +76,15 @@ services:
       # Agent planner (Developer Mission Control). Dormant until this is set. The URL must be
       # the gitscout-mcp service below; only read-only tools are auto-approved, everything
       # else pauses for the user's confirmation.
-      # gitci needs GITCI_MCP_TOKEN here too (same value as on the gitci-mcp service); the token is
+      # gitci needs GITCI_MCP_TOKEN here too (same value as on the git-ci-mcp service); the token is
       # read from the environment, never from this JSON. Only its read-only tools are auto-approved.
       - key: AGENT_MCP_SERVERS
-        value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}, {"name": "gitci", "url": "https://gitci-mcp.onrender.com/mcp", "bearer_env": "GITCI_MCP_TOKEN", "auto_approve": ["sandbox_status", "list_files", "read_file", "show_diff", "ci_status"]}]'
+        value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}, {"name": "gitci", "url": "https://git-ci-mcp.onrender.com/mcp", "bearer_env": "GITCI_MCP_TOKEN", "auto_approve": ["sandbox_status", "list_files", "read_file", "show_diff", "ci_status"]}]'
       - key: GITCI_MCP_TOKEN
         sync: false
-      # A mission that fixes a bug takes about a dozen tool calls.
+      # Find, fix, verify and report is about thirteen tool calls; the rest is room to retry.
       - key: AGENT_MAX_STEPS
-        value: "14"
+        value: "20"
       # Lets "fix the bug in the demo sandbox" resolve to a clone URL.
       - key: AGENT_DEFAULT_REPO
         value: "nirmitktripathii/gitscout-demo-sandbox"
@@ -148,7 +148,7 @@ services:
   # agent backend (behind sign-in and the approval gate) can reach it; it refuses to start without
   # one. GITHUB_TOKEN should be a fine-grained token limited to the demo repo.
   - type: web
-    name: gitci-mcp
+    name: git-ci-mcp
     env: python
     region: oregon
     plan: free
@@ -174,6 +174,12 @@ services:
       - key: GITCI_MCP_TOKEN
         sync: false
       - key: GITHUB_TOKEN
+        sync: false
+      # send_report messages this one chat. Create the bot with @BotFather; set both values in the
+      # Render dashboard only. Leave them unset to turn reporting off.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
         sync: false
 
   # 2. Background Scraper & AST Triage Worker

@@ -162,6 +162,51 @@ async def test_identical_repeat_call_is_refused(planner, source, llm):
     assert mission.status == MissionStatus.COMPLETED
 
 
+class CheckAndChange:
+    """A check that needs approval (like running tests) and a change that needs approval (an edit)."""
+
+    name = "w"
+
+    def __init__(self):
+        self.calls: List[tuple] = []
+
+    async def list_tools(self) -> List[ToolSpec]:
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+        return [ToolSpec(name="w.check", description="Run the tests.", input_schema=schema, requires_approval=True),
+                ToolSpec(name="w.change", description="Edit a file.", input_schema=schema, requires_approval=True)]
+
+    async def call_tool(self, tool: str, arguments: Dict[str, Any]) -> Any:
+        self.calls.append((tool, arguments))
+        return {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_same_check_may_run_again_after_a_change(llm):
+    src = CheckAndChange()
+    planner = MissionPlanner(ToolRegistry([src]), store=MissionStore(), max_steps=8)
+    llm.script += [_tool("w.check", x="1")]
+    mission = await planner.start("fix it")
+    for reply in (_tool("w.change", x="fix"), _tool("w.check", x="1"), _final("Fixed.")):
+        llm.script += [reply]
+        mission = await planner.resolve_approval(mission.id, approved=True)
+
+    assert [c[0] for c in src.calls] == ["check", "change", "check"]
+    assert "already called" not in "".join(llm.prompts)
+
+
+@pytest.mark.asyncio
+async def test_same_check_twice_in_a_row_is_still_a_loop(llm):
+    src = CheckAndChange()
+    planner = MissionPlanner(ToolRegistry([src]), store=MissionStore(), max_steps=8)
+    llm.script += [_tool("w.check", x="1")]
+    mission = await planner.start("fix it")
+    llm.script += [_tool("w.check", x="1"), _final("Done.")]
+    mission = await planner.resolve_approval(mission.id, approved=True)
+
+    assert [c[0] for c in src.calls] == ["check"]
+    assert "already called w.check" in llm.prompts[-1]
+
+
 @pytest.mark.asyncio
 async def test_step_limit_forces_a_final_answer(planner, source, llm):
     llm.script += [_tool("demo.search", query=q) for q in ("a", "b", "c")] + [_final("Here is what I have.")]
@@ -562,6 +607,16 @@ def test_planner_prompt_tells_the_model_the_request_may_be_misheard_speech():
     assert "speech recognition" in PLANNER_SYSTEM_PROMPT
     assert "Ollama" in PLANNER_SYSTEM_PROMPT
     assert "Never invent an issue id" in PLANNER_SYSTEM_PROMPT
+
+
+def test_planner_prompt_describes_the_fix_verify_report_order():
+    from app.agent.planner import PLANNER_SYSTEM_PROMPT
+
+    prompt = " ".join(PLANNER_SYSTEM_PROMPT.split())
+    assert "run the tests once first to see them fail" in prompt
+    assert "only if they now pass, commit and open a draft pull request" in prompt
+    assert "do not commit or open a pull request" in prompt
+    assert "send_report" in prompt and "only when the user asked" in prompt
 
 
 def test_default_repo_is_named_in_the_prompt_only_when_configured(monkeypatch):
