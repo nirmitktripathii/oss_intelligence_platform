@@ -126,11 +126,11 @@ export function ApprovalPreview({ step, history }: { step: LiveStep; history: Mi
     case 'send_report':
       body = (
         <>
-          <Row label="To">Your Telegram chat (fixed on the server)</Row>
+          <Row label="To">Your linked Telegram chat</Row>
           <pre className="whitespace-pre-wrap break-words rounded border border-border bg-background/70 p-2 text-[11px] leading-relaxed text-foreground">
             {reportText(str(a.title), str(a.summary), str(a.pr_url))}
           </pre>
-          <p className="text-[11px] text-muted-foreground">Plain text. The recipient cannot be changed from here.</p>
+          <p className="text-[11px] text-muted-foreground">Plain text. It goes to the chat you linked to your account; the assistant cannot choose another.</p>
         </>
       );
       break;

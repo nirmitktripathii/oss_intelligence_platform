@@ -165,6 +165,14 @@ class Settings(BaseSettings):
     # Multi-Channel Dispatchers
     TELEGRAM_BOT_TOKEN: Optional[str] = None
     TELEGRAM_CHAT_ID: Optional[str] = None
+    # Per-user Telegram linking (mission reports go to the chat each signed-in user linked). The
+    # webhook secret authenticates Telegram's calls to /telegram/webhook; the URL is where Telegram
+    # is told to send them (https://<api host>/api/v1/telegram/webhook). The username is looked up
+    # from the bot token when unset.
+    TELEGRAM_WEBHOOK_SECRET: Optional[str] = None
+    TELEGRAM_WEBHOOK_URL: Optional[str] = None
+    TELEGRAM_BOT_USERNAME: Optional[str] = None
+    TELEGRAM_LINK_TTL_SECONDS: int = 600      # how long a "Link Telegram" button press stays valid
 
     DISCORD_WEBHOOK_URL: Optional[str] = None
 

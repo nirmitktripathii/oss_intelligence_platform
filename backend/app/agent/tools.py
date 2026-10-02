@@ -16,7 +16,7 @@ import logging
 import os
 import re
 from contextlib import AsyncExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Protocol
 from app.config import settings
@@ -25,6 +25,38 @@ logger = logging.getLogger("gitscout.agent")
 
 _SERVER_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+
+
+# Arguments only this server may set, by bare tool name. The model never sees them in a tool's schema
+# and anything it supplies for them is dropped: who a report goes to is the user's own linked chat,
+# not whatever the model (or text it read in an issue) names. Keyed by bare name so it holds
+# whatever the server is called in AGENT_MCP_SERVERS.
+SERVER_SET_ARGUMENTS: Dict[str, FrozenSet[str]] = {"send_report": frozenset({"chat_id"})}
+
+
+def bare_name(qualified_name: str) -> str:
+    return qualified_name.partition(".")[2] or qualified_name
+
+
+def is_report_tool(qualified_name: str) -> bool:
+    return bare_name(qualified_name) == "send_report"
+
+
+def without_server_set(qualified_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """``arguments`` minus the ones only the server may set for this tool."""
+    hidden = SERVER_SET_ARGUMENTS.get(bare_name(qualified_name), frozenset())
+    return {k: v for k, v in arguments.items() if k not in hidden}
+
+
+def _hide_server_set(spec: "ToolSpec") -> "ToolSpec":
+    hidden = SERVER_SET_ARGUMENTS.get(bare_name(spec.name))
+    if not hidden:
+        return spec
+    schema = dict(spec.input_schema)
+    schema["properties"] = {k: v for k, v in (schema.get("properties") or {}).items() if k not in hidden}
+    if "required" in schema:
+        schema["required"] = [k for k in schema["required"] if k not in hidden]
+    return replace(spec, input_schema=schema)
 
 
 class ToolError(Exception):
@@ -149,17 +181,21 @@ class ToolRegistry:
         tools: List[ToolSpec] = []
         for source in self._sources.values():
             try:
-                tools.extend(await source.list_tools())
+                tools.extend(_hide_server_set(spec) for spec in await source.list_tools())
             except Exception as exc:
                 logger.warning("[AGENT] tool source %r is unreachable: %r", source.name, exc)
         return tools
 
-    async def call(self, qualified_name: str, arguments: Dict[str, Any]) -> Any:
+    async def call(self, qualified_name: str, arguments: Dict[str, Any],
+                   server_set: Optional[Dict[str, Any]] = None) -> Any:
+        """Run a tool. ``server_set`` carries the arguments only the server may supply (see above)."""
         server, _, tool = qualified_name.partition(".")
         source = self._sources.get(server)
         if source is None or not tool:
             raise ToolError(f"unknown tool '{qualified_name}'")
-        return await source.call_tool(tool, arguments)
+        allowed = SERVER_SET_ARGUMENTS.get(tool, frozenset())
+        extra = {k: v for k, v in (server_set or {}).items() if k in allowed}
+        return await source.call_tool(tool, {**without_server_set(qualified_name, arguments), **extra})
 
 
 @lru_cache(maxsize=4)

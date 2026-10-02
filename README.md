@@ -489,7 +489,8 @@ flowchart LR
 > listing or removing subscriptions, need a signed-in account; subscribing is open but rate limited
 > and every destination is validated for its channel. A channel without credentials answers
 > `not_configured` instead of claiming delivery. The agent's own Telegram report (`send_report` on the
-> Git/CI server) is separate: see `docs/DEMO-approval-gate.md`.
+> Git/CI server) is separate: each signed-in user links their own Telegram chat on `/alexa` and gets
+> their own reports (see `docs/DEMO-approval-gate.md`).
 
 ### 1. Telegram Bot Integration
 - **Interactive Inline Buttons**: Every Telegram alert includes direct callback buttons: `[🚀 View in GitScout]`, `[🔍 AI Fix Plan]`, and `[💰 Claim Bounty]`.

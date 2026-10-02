@@ -276,3 +276,14 @@ for the Open Source mini-challenge.
 - **Not wired:** nothing calls `broadcast_issue_alert` when a new issue is indexed, so there is no automatic alert broadcast. The submission should not claim one.
 - Tests: Git/CI 31 pass (7 new send_report tests). Backend 177 pass: 156 before the lock-down (3 of them new planner tests for the order and the repeat guard), plus 21 notification tests.
 
+
+## 2026-10-02 (per-user Telegram reports)
+
+- **Why.** `send_report` went to one fixed chat, the owner's. A visitor who ran the mission would never see their own report, and the demo looked like a feature only the author could use.
+- **Linking.** A signed-in user presses Link Telegram on /alexa. The backend makes a one-time code tied to their GitHub login (10 minute life, stored only as a hash, single use, a new code replaces the old one) and returns a `t.me/<bot>?start=<code>` link. Pressing Start sends the code to a webhook that stores the chat against that login. The webhook rejects any request without the secret header, only answers private chats, and `/stop` in the chat unlinks it. The page has Link, Cancel and Unlink and updates by itself.
+- **The model never picks the recipient.** The `chat_id` argument of `send_report` is removed from the schema the model sees (and from `/agent/tools`), dropped from anything the model supplies, and added only by the backend from the signed-in owner's link. The mission does not store it. Approving a report sends it to the chat of the person who owns the conversation, even if the model names someone else's.
+- **Not linked.** The report tool is not offered, and the planner tells the user to press Link Telegram instead of asking for a chat id. Unlinking between proposal and approval makes the step fail with that message instead of sending.
+- **Limits.** Chat ids must be digits. Per-chat hourly cap and a global hourly cap (`GITCI_REPORTS_GLOBAL_PER_HOUR`, default 60) on the Git/CI server. Link creation uses the existing notification rate limit. `TELEGRAM_CHAT_ID` stays only as a fallback for callers that name no chat.
+- **Token leak fixed.** httpx logs every request URL at INFO and Telegram URLs contain the bot token, so the token was reaching the logs. The httpx logger is now at WARNING in the backend and the Git/CI server, the bot client never logs URLs or bodies, and a test asserts the token never appears in logs.
+- **Operator steps.** Set `TELEGRAM_WEBHOOK_SECRET` on gitscout-api (letters, digits, `_`, `-`), use the same `TELEGRAM_BOT_TOKEN` on both services, redeploy. The webhook registers at startup. A bot has one webhook, so this stops any other program polling `getUpdates` with the same bot.
+- Tests: Git/CI 43 pass. Backend 205 pass (28 new in `test_telegram_link.py`). Frontend: `tsc`, lint (only older hook warnings) and `next build` clean; panel checked visually in the unlinked, waiting and linked states at desktop and phone width against a stand-in API.

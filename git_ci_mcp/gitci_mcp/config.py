@@ -46,11 +46,16 @@ class Settings:
     github_token: str = os.getenv("GITHUB_TOKEN", "")
     github_api: str = os.getenv("GITHUB_API_BASE", "https://api.github.com")
 
-    # Where send_report delivers: one Telegram chat, fixed here and never chosen by a caller. Both
-    # unset = reporting is off. Not visible to test commands (see _SAFE_ENV in sandbox.py).
+    # Where send_report delivers. The bot token is required. The agent backend (the only caller that
+    # holds the bearer token) names the recipient chat, the one the signed-in user linked to their own
+    # account; the model never chooses it. TELEGRAM_CHAT_ID is the fallback when no chat is named
+    # (a standalone install reporting to its owner). Neither is visible to test commands (see
+    # _SAFE_ENV in sandbox.py).
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
+    # Per chat, and across all chats (the second one bounds the bot's total output).
     report_max_per_hour: int = int(os.getenv("GITCI_REPORTS_PER_HOUR", "10"))
+    report_global_max_per_hour: int = int(os.getenv("GITCI_REPORTS_GLOBAL_PER_HOUR", "60"))
 
     # Commit identity. Unset = use the machine's own git config (your identity).
     author_name: str = os.getenv("GITCI_AUTHOR_NAME", "")

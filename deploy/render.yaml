@@ -47,6 +47,15 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+      # Per-user report linking. The signed-in user presses "Link Telegram" on /alexa and then Start in
+      # the bot; Telegram calls the webhook below, signed with TELEGRAM_WEBHOOK_SECRET, and the chat
+      # is stored against that GitHub login. Make the secret yourself (letters, digits, _ and -, up to
+      # 256 characters) and set it in the dashboard only. The bot token above is the same bot as on the
+      # git-ci-mcp service.
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: TELEGRAM_WEBHOOK_URL
+        value: "https://gitscout-api.onrender.com/api/v1/telegram/webhook"
       - key: DISCORD_WEBHOOK_URL
         sync: false
       - key: RESEND_API_KEY
@@ -175,8 +184,9 @@ services:
         sync: false
       - key: GITHUB_TOKEN
         sync: false
-      # send_report messages this one chat. Create the bot with @BotFather; set both values in the
-      # Render dashboard only. Leave them unset to turn reporting off.
+      # send_report messages the chat that gitscout-api names (the signed-in user's own linked chat).
+      # TELEGRAM_CHAT_ID is only the fallback when no chat is named. Create the bot with @BotFather;
+      # set the values in the Render dashboard only. Leave the token unset to turn reporting off.
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_CHAT_ID
