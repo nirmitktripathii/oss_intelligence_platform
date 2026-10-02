@@ -11,6 +11,16 @@ export const baseTool = (tool: string): string => tool.slice(tool.indexOf('.') +
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+const capped = (text: string, limit: number): string => (text.length <= limit ? text : `${text.slice(0, limit - 1).trimEnd()}…`);
+
+/** The Telegram message `send_report` will send. Mirrors the server's template and length caps. */
+export function reportText(title: string, summary: string, prUrl: string): string {
+  const parts = ['Developer Mission Control report', capped(title.trim(), 120) || '(no title)'];
+  if (summary.trim()) parts.push(capped(summary.trim(), 1200));
+  if (prUrl.trim()) parts.push(`Draft pull request: ${prUrl.trim()}`);
+  return parts.join('\n\n');
+}
+
 /** Every edit made so far in this conversation turn, as one diff: what a commit would contain. */
 export function pendingChanges(history: MissionStep[], before: number): DiffLine[] {
   const lines: DiffLine[] = [];
@@ -113,6 +123,17 @@ export function ApprovalPreview({ step, history }: { step: LiveStep; history: Mi
       );
       break;
     }
+    case 'send_report':
+      body = (
+        <>
+          <Row label="To">Your Telegram chat (fixed on the server)</Row>
+          <pre className="whitespace-pre-wrap break-words rounded border border-border bg-background/70 p-2 text-[11px] leading-relaxed text-foreground">
+            {reportText(str(a.title), str(a.summary), str(a.pr_url))}
+          </pre>
+          <p className="text-[11px] text-muted-foreground">Plain text. The recipient cannot be changed from here.</p>
+        </>
+      );
+      break;
     default:
       body = null;
   }
