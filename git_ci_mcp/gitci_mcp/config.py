@@ -22,9 +22,14 @@ class Settings:
 
     # Every sandbox is a directory under this root; nothing outside it is ever touched.
     sandbox_root: str = os.getenv("GITCI_SANDBOX_ROOT", os.path.join(tempfile.gettempdir(), "gitci-sandboxes"))
-    max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "3"))
-    # Sandboxes older than this are deleted the next time one is created.
-    sandbox_ttl_seconds: int = int(os.getenv("GITCI_SANDBOX_TTL_SECONDS", "7200"))
+    # One pool shared by everyone who uses this server, and nobody can list or free another person's
+    # sandbox. So a full pool must free itself: nothing here depends on a caller cleaning up.
+    max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "5"))
+    # A sandbox nobody has used for this long is deleted the next time one is created.
+    sandbox_ttl_seconds: int = int(os.getenv("GITCI_SANDBOX_TTL_SECONDS", "1800"))
+    # When the pool is full, the sandbox that has been idle longest is deleted to make room, provided
+    # it has been idle at least this long. Anything busier is left alone and the caller is told to wait.
+    sandbox_reclaim_seconds: int = int(os.getenv("GITCI_SANDBOX_RECLAIM_SECONDS", "600"))
 
     # Default-deny: only repos owned by these GitHub users/orgs can be cloned, tested or pushed.
     # Point it at your own fork (the demo sandbox), never at repos you do not control, because

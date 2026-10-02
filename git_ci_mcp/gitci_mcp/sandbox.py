@@ -89,10 +89,21 @@ class SandboxManager:
     # ---------------------------------------------------------------- plumbing
     def _dir(self, sandbox_id: str) -> Path:
         if not _SANDBOX_ID.match(sandbox_id or ""):
-            raise GitCiError("Unknown sandbox id.")
+            raise GitCiError(
+                "That is not a sandbox id. Use the sandbox_id that sandbox_clone returned (12 letters and digits); "
+                "do not guess one."
+            )
         d = self.root / sandbox_id
-        if not (d / "meta.json").is_file():
-            raise GitCiError("Unknown sandbox id (it may have expired).")
+        meta = d / "meta.json"
+        if not meta.is_file():
+            raise GitCiError(
+                "Unknown sandbox id. It may have expired or been reclaimed after sitting idle. "
+                "Run sandbox_clone again to get a new one."
+            )
+        try:
+            os.utime(meta)  # every use counts as activity, so only abandoned sandboxes look idle
+        except OSError:
+            pass
         return d
 
     def _meta(self, sandbox_id: str) -> Dict[str, Any]:
@@ -141,19 +152,35 @@ class SandboxManager:
         return text if len(text) <= cap else "...(truncated)...\n" + text[-cap:]
 
     def _sweep(self) -> None:
-        """Delete expired sandboxes, then refuse to exceed the limit."""
+        """Make room for one more sandbox: delete the abandoned ones, and if the pool is still full,
+        the one idle longest (when it has been idle long enough). Otherwise ask the caller to wait.
+
+        Callers cannot list or destroy each other's sandboxes, so a full pool is never something a
+        caller can fix by itself; it has to clear on its own. Last use is the mtime of meta.json."""
         self.root.mkdir(parents=True, exist_ok=True)
         now = time.time()
-        live = []
+        live = []  # (idle seconds, directory)
         for d in self.root.iterdir():
-            if not (d / "meta.json").is_file():
+            meta = d / "meta.json"
+            if not meta.is_file():
                 continue
-            if now - d.stat().st_mtime > self.cfg.sandbox_ttl_seconds:
+            idle = now - meta.stat().st_mtime
+            if idle > self.cfg.sandbox_ttl_seconds:
                 shutil.rmtree(d, ignore_errors=True)
             else:
-                live.append(d)
-        if len(live) >= self.cfg.max_sandboxes:
-            raise GitCiError(f"At most {self.cfg.max_sandboxes} sandboxes at a time; destroy one first.")
+                live.append((idle, d))
+        if len(live) < self.cfg.max_sandboxes:
+            return
+        live.sort(key=lambda item: item[0], reverse=True)
+        if live[0][0] >= self.cfg.sandbox_reclaim_seconds:
+            shutil.rmtree(live[0][1], ignore_errors=True)
+            return
+        minutes = max(1, round((self.cfg.sandbox_reclaim_seconds - live[0][0]) / 60))
+        raise GitCiError(
+            f"All {self.cfg.max_sandboxes} sandboxes are in use by other missions right now. Try again in "
+            f"about {minutes} minute(s); one is freed once it has been idle that long. You cannot see or "
+            "free other people's sandboxes, so do not try to destroy any."
+        )
 
     def _check_owner(self, owner: str) -> None:
         if owner.lower() not in {o.lower() for o in self.cfg.allowed_owners}:

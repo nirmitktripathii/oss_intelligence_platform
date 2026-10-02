@@ -1,6 +1,7 @@
 """Offline tests: tool surface, input validation, and a full local clone/branch/patch/commit flow."""
 
 import asyncio
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -429,3 +430,120 @@ def test_the_bot_token_never_reaches_the_logs(telegram, caplog):
     with caplog.at_level("INFO"):
         asyncio.run(_reporter().send("t", "s"))
     assert "SECRET-TOKEN" not in caplog.text
+
+
+# ---------------------------------------------------------------- the shared sandbox pool
+def _pool(tmp_path, max_sandboxes=3):
+    """A manager over a real local origin, so create() clones for real and fast."""
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-b", "main")
+    (origin / "a.txt").write_text("hello\n")
+    _git(origin, "add", ".")
+    _git(origin, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init")
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path / "sb")
+    cfg.allowed_owners = ["o"]
+    cfg.max_sandboxes = max_sandboxes
+    cfg.sandbox_ttl_seconds = 1800
+    cfg.sandbox_reclaim_seconds = 600
+    mgr = SandboxManager(cfg)
+
+    async def make():
+        return (await mgr.create("https://github.com/o/r", source=str(origin)))["sandbox_id"]
+
+    def age(sid, seconds):
+        meta = Path(cfg.sandbox_root) / sid / "meta.json"
+        then = meta.stat().st_mtime - seconds
+        os.utime(meta, (then, then))
+
+    def exists(sid):
+        return (Path(cfg.sandbox_root) / sid / "meta.json").is_file()
+
+    return mgr, make, age, exists
+
+
+def test_a_full_pool_of_busy_sandboxes_asks_the_caller_to_wait(tmp_path):
+    mgr, make, age, exists = _pool(tmp_path)
+
+    async def flow():
+        ids = [await make() for _ in range(3)]
+        with pytest.raises(GitCiError) as err:
+            await make()
+        msg = str(err.value)
+        assert "in use by other missions" in msg and "do not try to destroy" in msg
+        assert all(exists(s) for s in ids)  # nobody's work was deleted
+
+    asyncio.run(flow())
+
+
+def test_a_full_pool_frees_itself_by_reclaiming_the_longest_idle_sandbox(tmp_path):
+    mgr, make, age, exists = _pool(tmp_path)
+
+    async def flow():
+        a, b, c = [await make() for _ in range(3)]
+        age(a, 900)  # idle past the reclaim time
+        age(b, 700)  # idle too, but less than a
+        fresh = await make()
+        assert not exists(a) and exists(b) and exists(c) and exists(fresh)
+
+    asyncio.run(flow())
+
+
+def test_using_a_sandbox_keeps_it_from_being_reclaimed(tmp_path):
+    mgr, make, age, exists = _pool(tmp_path)
+
+    async def flow():
+        a, b, c = [await make() for _ in range(3)]
+        for s in (a, b, c):
+            age(s, 900)
+        await mgr.status(a)  # a is in use again
+        await make()
+        assert exists(a)
+        assert not (exists(b) and exists(c))  # one of the idle two went instead
+
+    asyncio.run(flow())
+
+
+def test_abandoned_sandboxes_are_deleted_even_when_the_pool_is_not_full(tmp_path):
+    mgr, make, age, exists = _pool(tmp_path, max_sandboxes=5)
+
+    async def flow():
+        old, kept = await make(), await make()
+        age(old, 1900)  # past the idle limit
+        age(kept, 100)
+        await make()
+        assert not exists(old) and exists(kept)
+
+    asyncio.run(flow())
+
+
+def test_a_pool_left_full_by_finished_missions_does_not_stay_stuck(tmp_path):
+    """The bug: missions that finish never destroy their sandbox, and with three of them everyone was
+    locked out for two hours. Ten minutes after the last one was used, the next visitor gets in."""
+    mgr, make, age, exists = _pool(tmp_path)
+
+    async def flow():
+        ids = [await make() for _ in range(3)]
+        with pytest.raises(GitCiError):
+            await make()
+        for s in ids:
+            age(s, 601)
+        assert await make()
+
+    asyncio.run(flow())
+
+
+@pytest.mark.parametrize("guess", ["sandbox-1", "sandbox", "", "../x"])
+def test_a_guessed_sandbox_id_says_where_ids_come_from(tmp_path, guess):
+    mgr, make, age, exists = _pool(tmp_path)
+    with pytest.raises(GitCiError) as err:
+        asyncio.run(mgr.destroy(guess))
+    assert "sandbox_clone" in str(err.value) and "do not guess" in str(err.value)
+
+
+def test_an_unknown_but_well_formed_id_says_to_clone_again(tmp_path):
+    mgr, make, age, exists = _pool(tmp_path)
+    with pytest.raises(GitCiError) as err:
+        asyncio.run(mgr.status("0123456789ab"))
+    assert "sandbox_clone again" in str(err.value)
