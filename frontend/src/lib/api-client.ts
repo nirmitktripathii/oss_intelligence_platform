@@ -8,6 +8,7 @@ import {
 } from '@/types/notifications';
 import { CheckoutRequest, CheckoutResponse, SubscriptionStatus } from '@/types/billing';
 import { SAMPLE_FALLBACK_ISSUES } from './constants';
+import { authHeaders } from './auth-client';
 
 export function resolveApiBase(rawUrl?: string): string {
   let url = (rawUrl || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1').trim();
@@ -76,12 +77,12 @@ class ApiClient {
     const url = `${this.baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
     try {
       const res = await fetch(url, {
+        ...options,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
           ...options?.headers,
         },
-        ...options,
       });
 
       if (!res.ok) {
@@ -225,22 +226,32 @@ class ApiClient {
   }
 
   async testNotification(data: TestNotificationRequest): Promise<TestNotificationResponse> {
+    const result = (success: boolean, message: string): TestNotificationResponse => ({
+      success,
+      message,
+      channel: data.channel,
+      timestamp: new Date().toISOString(),
+    });
     try {
-      return await this.request<TestNotificationResponse>('/notifications/test', {
+      // Sending a test message needs a signed-in account (the server refuses anonymous callers).
+      const res = await this.request<{ status: string; delivered: boolean; message: string }>('/notifications/test', {
         method: 'POST',
+        headers: authHeaders(),
         body: JSON.stringify({
           channel: data.channel,
           destination: data.destination,
-          issue_id: data.issueId,
         }),
       });
-    } catch {
-      return {
-        success: false,
-        message: `Could not reach the notification service - no test message was sent to ${data.channel}.`,
-        channel: data.channel,
-        timestamp: new Date().toISOString(),
-      };
+      // "delivered" is the server's word that a message really went out; "not_configured" means the
+      // channel has no credentials on the server, so nothing was sent.
+      return result(res.delivered === true, res.message);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : '';
+      if (text.includes('API Error 401')) return result(false, 'Sign in to send a test message.');
+      if (text.includes('API Error 403')) return result(false, 'This account is not allowed to send test messages.');
+      if (text.includes('API Error 422')) return result(false, `That does not look like a valid ${data.channel} destination.`);
+      if (text.includes('API Error 429')) return result(false, 'Too many test messages. Try again in a minute.');
+      return result(false, `Could not reach the notification service - no test message was sent to ${data.channel}.`);
     }
   }
 

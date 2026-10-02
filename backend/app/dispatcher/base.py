@@ -32,6 +32,10 @@ class AlertPayload(BaseModel):
 class BaseNotifier(ABC):
     """Abstract interface for all notification channel adapters."""
 
+    def is_configured(self) -> bool:
+        """Whether this channel has the credentials to really send. Without them the adapters only log."""
+        return True
+
     @abstractmethod
     async def send_alert(self, destination: str, payload: AlertPayload) -> bool:
         """Send an issue/bounty alert to destination."""

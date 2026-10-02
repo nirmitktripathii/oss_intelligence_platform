@@ -73,6 +73,7 @@ class DiscordNotifier(BaseNotifier):
         body = {
             "username": "GitScout Radar",
             "content": f"🔔 **GitScout Webhook Test**: {message}",
+            "allowed_mentions": {"parse": []},  # the text is caller-supplied: never ping anyone
         }
         return await self._post_webhook(webhook_url, body)
 

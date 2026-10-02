@@ -17,6 +17,10 @@ from app.schemas.notification import ChannelType
 logger = logging.getLogger(__name__)
 
 
+class ChannelNotConfigured(Exception):
+    """The channel has no credentials on this server, so nothing can really be sent."""
+
+
 class NotificationRouter:
     """Routes alerts to subscribers based on matching rules across all channels."""
 
@@ -63,7 +67,8 @@ class NotificationRouter:
         for sub in subscriptions:
             if self._matches_subscription(sub, issue):
                 notifier = self.get_notifier(sub.channel)
-                if notifier:
+                # An unconfigured adapter only logs and says "sent"; do not count that as delivery.
+                if notifier and notifier.is_configured():
                     dispatch_tasks.append(notifier.send_alert(sub.destination, payload))
 
         if not dispatch_tasks:
@@ -79,6 +84,8 @@ class NotificationRouter:
         notifier = self.get_notifier(channel.value)
         if not notifier:
             raise ValueError(f"Unsupported notification channel: {channel}")
+        if not notifier.is_configured():
+            raise ChannelNotConfigured(channel.value)
 
         test_msg = message or "Your GitScout notifications are active! You will receive alerts when matching open issues are found."
         return await notifier.send_test_message(destination, test_msg)

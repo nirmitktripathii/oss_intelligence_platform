@@ -2,11 +2,12 @@
 
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
-from app.dispatcher.router import notification_router
+from app.config import settings
+from app.dispatcher.router import ChannelNotConfigured, notification_router
 from app.models.subscription import NotificationSubscription
 from app.schemas.notification import (
     SubscriptionCreate,
@@ -14,8 +15,14 @@ from app.schemas.notification import (
     TestNotificationRequest,
     TestNotificationResponse,
 )
+from app.security.auth import AuthUser, require_writer
+from app.security.rate_limiter import limiter
 
 router = APIRouter(tags=["Notifications"])
+
+
+def _notify_rate_limit() -> str:
+    return settings.NOTIFY_RATE_LIMIT
 
 
 @router.post(
@@ -24,12 +31,18 @@ router = APIRouter(tags=["Notifications"])
     status_code=status.HTTP_201_CREATED,
     summary="Subscribe to Multi-Channel Alerts",
 )
+@limiter.limit(_notify_rate_limit)
 async def create_subscription(
+    request: Request,
+    response: Response,
     sub_in: SubscriptionCreate,
     db: AsyncSession = Depends(get_db),
 ):
     """
     Subscribe to real-time issue and bounty alerts via Telegram, Discord, Email, or WhatsApp.
+
+    Open to anyone, but the destination must be well formed for its channel and the call is
+    rate limited. Listing and removing subscriptions need a signed-in user.
     """
     # Check existing subscription for channel + destination
     stmt = select(NotificationSubscription).where(
@@ -73,8 +86,8 @@ async def create_subscription(
     response_model=List[SubscriptionResponse],
     summary="List Active Subscriptions",
 )
-async def list_subscriptions(db: AsyncSession = Depends(get_db)):
-    """List all registered notification alerts."""
+async def list_subscriptions(db: AsyncSession = Depends(get_db), _user: AuthUser = Depends(require_writer)):
+    """List all registered notification alerts (they hold people's chat ids and email addresses)."""
     stmt = select(NotificationSubscription).order_by(NotificationSubscription.id.desc())
     res = await db.execute(stmt)
     subs = res.scalars().all()
@@ -86,9 +99,13 @@ async def list_subscriptions(db: AsyncSession = Depends(get_db)):
     response_model=TestNotificationResponse,
     summary="Test Notification Channel",
 )
-async def test_notification(req: TestNotificationRequest):
+@limiter.limit(_notify_rate_limit)
+async def test_notification(request: Request, response: Response, req: TestNotificationRequest, _user: AuthUser = Depends(require_writer)):
     """
-    Dispatch an instant verification test message to a specified Telegram, Discord, Email, or WhatsApp destination.
+    Send one verification message to a Telegram, Discord, Email, or WhatsApp destination.
+
+    Needs a signed-in user: this sends real messages. If the channel has no credentials on this
+    server nothing is sent and the answer says so (status "not_configured"), never "delivered".
     """
     try:
         delivered = await notification_router.dispatch_test_message(
@@ -96,22 +113,29 @@ async def test_notification(req: TestNotificationRequest):
             destination=req.destination,
             message=req.custom_message,
         )
+    except ChannelNotConfigured:
         return TestNotificationResponse(
-            status="success" if delivered else "failed",
+            status="not_configured",
             channel=req.channel,
             destination=req.destination,
-            message=req.custom_message or "Test message dispatched.",
-            delivered=delivered,
+            message=f"{req.channel.value} is not set up on this server, so nothing was sent.",
+            delivered=False,
         )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to dispatch test notification: {exc}",
-        )
+    except Exception:
+        raise HTTPException(status_code=502, detail="The test message could not be sent.")
+    return TestNotificationResponse(
+        status="success" if delivered else "failed",
+        channel=req.channel,
+        destination=req.destination,
+        message=req.custom_message or "Test message dispatched.",
+        delivered=delivered,
+    )
 
 
 @router.delete("/notifications/{subscription_id}", summary="Unsubscribe Alert")
-async def delete_subscription(subscription_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_subscription(
+    subscription_id: int, db: AsyncSession = Depends(get_db), _user: AuthUser = Depends(require_writer)
+):
     """Delete or deactivate a notification subscription."""
     stmt = select(NotificationSubscription).where(NotificationSubscription.id == subscription_id)
     res = await db.execute(stmt)

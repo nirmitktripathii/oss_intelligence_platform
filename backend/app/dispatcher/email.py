@@ -1,5 +1,6 @@
 """Transactional Email Notifier via Resend API with aiosmtplib fallback."""
 
+import html
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import logging
@@ -22,6 +23,9 @@ class EmailNotifier(BaseNotifier):
     ):
         self.resend_api_key = resend_api_key or settings.RESEND_API_KEY
         self.from_email = from_email or settings.RESEND_FROM_EMAIL or settings.SMTP_FROM_EMAIL
+
+    def is_configured(self) -> bool:
+        return bool(self.resend_api_key or settings.SMTP_HOST)
 
     async def send_alert(self, destination: str, payload: AlertPayload) -> bool:
         """Send formatted HTML email alert to recipient."""
@@ -47,7 +51,7 @@ class EmailNotifier(BaseNotifier):
     async def send_test_message(self, destination: str, message: str) -> bool:
         """Send verification test email."""
         subject = "[GitScout] Notification Test"
-        html_content = f"<h2>GitScout Email Test</h2><p>{message}</p>"
+        html_content = f"<h2>GitScout Email Test</h2><p>{html.escape(message)}</p>"
 
         if self.resend_api_key:
             return await self._send_via_resend(destination, subject, html_content)
