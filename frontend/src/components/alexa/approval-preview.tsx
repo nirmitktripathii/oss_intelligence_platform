@@ -69,9 +69,28 @@ export function ApprovalPreview({ step, history }: { step: LiveStep; history: Mi
       body = (
         <>
           <Row label="Clone">{str(a.repo_url)}</Row>
+          {str(a.branch) && <Row label="Resume">your saved work on {str(a.branch)}</Row>}
           <p className="text-[11px] text-muted-foreground">Into a throwaway copy on the server. Nothing is changed on GitHub.</p>
         </>
       );
+      break;
+    case 'delete_saved_work':
+      body = (
+        <>
+          <Row label="Repo">{str(a.repo_url).replace('https://github.com/', '')}</Row>
+          <Row label="Branch">{str(a.branch)}</Row>
+          <p className="text-[11px] text-muted-foreground">
+            Permanently deletes your saved, unfinished work on this branch to free space. Anything already pushed to GitHub stays there.
+          </p>
+        </>
+      );
+      break;
+    case 'destroy_sandbox':
+      body = a.discard ? (
+        <p className="text-[11px] text-muted-foreground">
+          Deletes the sandbox <span className="font-semibold">without saving</span> its unfinished work.
+        </p>
+      ) : null;
       break;
     case 'create_branch':
       body = <Row label="Branch">{str(a.name)}</Row>;
@@ -108,7 +127,8 @@ export function ApprovalPreview({ step, history }: { step: LiveStep; history: Mi
       break;
     case 'draft_pr': {
       const repo = findArg(history, 'sandbox_clone', 'repo_url', step.index).replace('https://github.com/', '');
-      const branch = findArg(history, 'create_branch', 'name', step.index);
+      const branch =
+        findArg(history, 'create_branch', 'name', step.index) || findArg(history, 'sandbox_clone', 'branch', step.index);
       body = (
         <>
           {repo && <Row label="Repo">{repo}</Row>}

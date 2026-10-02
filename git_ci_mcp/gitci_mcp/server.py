@@ -24,13 +24,14 @@ mcp = MCPServer(
         "Turn a triaged issue into a reviewed change. Flow: sandbox_clone, list_files/read_file, create_branch, edit_file (exact old/new text, preferred) or apply_patch (a unified diff), "
         "run_tests, show_diff, commit_changes, draft_pr, then ci_status and send_report. Only allow-listed repos work. "
         "Pull requests are always drafts and the base branch is never pushed. send_report messages the "
-        "user on their linked Telegram chat (the recipient is chosen by the server). Ask the user before every step that writes (clone, patch, "
-        "tests, commit, PR, report)."
+        "user on their linked Telegram chat (the recipient is chosen by the server). A signed-in user's unfinished work is saved "
+        "after every change, one record per branch: sandbox_clone lists it, and sandbox_clone with that branch puts it back. "
+        "Ask the user before every step that writes (clone, patch, tests, commit, PR, report, deleting saved work)."
     ),
 )
 
-_sandboxes = SandboxManager(settings)
 _github = GitHub(settings)
+_sandboxes = SandboxManager(settings, pr_state=_github.pr_state)
 _reporter = Reporter(settings, _sandboxes)
 
 
@@ -43,9 +44,9 @@ async def _guard(coro):
 
 
 @mcp.tool()
-async def sandbox_clone(repo_url: str, ref: Optional[str] = None) -> dict:
-    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a throwaway sandbox."""
-    return await _guard(_sandboxes.create(repo_url, ref))
+async def sandbox_clone(repo_url: str, ref: Optional[str] = None, branch: Optional[str] = None, owner: str = "") -> dict:
+    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a sandbox. The user's unfinished work is saved after every change, one record per branch. Without branch, the sandbox starts clean and "saved_work" in the result lists the user's saved branches of this repo. To continue one of them, call sandbox_clone with branch set to its name: the work comes back on that branch (see "resumed": commits, changed files, pull request), so continue from there instead of redoing it. The owner is set by the system, not by you."""
+    return await _guard(_sandboxes.create(repo_url, ref, user=owner, branch=branch))
 
 
 @mcp.tool()
@@ -68,7 +69,7 @@ async def read_file(sandbox_id: str, path: str) -> dict:
 
 @mcp.tool()
 async def create_branch(sandbox_id: str, name: str) -> dict:
-    """Create and switch to a new feature branch in the sandbox."""
+    """Create and switch to a new feature branch in the sandbox, from wherever it is. Created while on another feature branch, it is stacked on that branch, and its pull request targets that branch."""
     return await _guard(_sandboxes.create_branch(sandbox_id, name))
 
 
@@ -117,12 +118,17 @@ async def ci_status(repo: str, ref: str) -> dict:
 
 @mcp.tool()
 async def draft_pr(sandbox_id: str, title: str, body: str = "") -> dict:
-    """Push the sandbox's feature branch and open a DRAFT pull request against the base branch."""
+    """Push the sandbox's feature branch and open a DRAFT pull request against the base branch (or, for a stacked branch, against the branch it was created on)."""
     async def go():
         meta = _sandboxes.meta(sandbox_id)
+        target = await _sandboxes.pr_base(sandbox_id)
         pushed = await _sandboxes.push_branch(sandbox_id, settings.github_token)
-        pr = await _github.draft_pr(meta["owner"], meta["repo"], pushed["branch"], meta["base"], title, body)
-        return {**pr, "branch": pushed["branch"]}
+        pr = await _github.draft_pr(meta["owner"], meta["repo"], pushed["branch"], target["base"], title, body)
+        await _sandboxes.record_pr(sandbox_id, pr["url"])
+        out = {**pr, "branch": pushed["branch"], "base": target["base"]}
+        if target.get("note"):
+            out["note"] = target["note"]
+        return out
     return await _guard(go())
 
 
@@ -133,9 +139,21 @@ async def send_report(title: str, summary: str, pr_url: str = "", chat_id: str =
 
 
 @mcp.tool()
-async def destroy_sandbox(sandbox_id: str) -> dict:
-    """Delete a sandbox and everything in it."""
-    return await _guard(_sandboxes.destroy(sandbox_id))
+async def destroy_sandbox(sandbox_id: str, discard: bool = False) -> dict:
+    """Delete your sandbox when the task is done. Unfinished work is saved first and comes back with sandbox_clone and its branch. Pass discard=true only when the user says to throw the work away."""
+    return await _guard(_sandboxes.destroy(sandbox_id, discard))
+
+
+@mcp.tool()
+async def list_saved_work(repo_url: Optional[str] = None, owner: str = "") -> dict:
+    """List the user's saved unfinished work (every repo, or one): branch, commits, changed files, pull request, when saved, and how much of their space (branches and MB) is used. Read-only. The owner is set by the system, not by you."""
+    return await _guard(_sandboxes.list_saved(owner, repo_url))
+
+
+@mcp.tool()
+async def delete_saved_work(repo_url: str, branch: str, owner: str = "") -> dict:
+    """Permanently delete the user's saved work on one branch, to free space. Only when the user names what to delete. The owner is set by the system, not by you."""
+    return await _guard(_sandboxes.delete_saved(owner, repo_url, branch))
 
 
 def create_app():

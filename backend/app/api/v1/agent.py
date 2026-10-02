@@ -114,6 +114,11 @@ async def _email_to(db: AsyncSession, user: Optional[AuthUser], can_write: bool)
     return await email_links.address_for(db, user.login)
 
 
+def _workspace_owner(user: Optional[AuthUser], can_write: bool) -> Optional[str]:
+    """Whose saved sandbox work ``sandbox_clone`` brings back: the signed-in writer's own login."""
+    return user.login.lower() if can_write and user is not None else None
+
+
 async def _require_write_rights(user: Optional[AuthUser], mission: Mission) -> None:
     """Approving a change needs a signed-in, allowed user who owns the conversation."""
     if await _can_write(user, mission.session_id):
@@ -197,7 +202,7 @@ async def create_mission(
     can_write = await _can_write(user, session_id)
     planner = MissionPlanner(
         registry, can_write=can_write, report_chat_id=await _report_chat(db, user, can_write),
-        email_to=await _email_to(db, user, can_write),
+        email_to=await _email_to(db, user, can_write), workspace_owner=_workspace_owner(user, can_write),
     )
     return await planner.start(req.utterance, session_id, owner=user.login if user else None)
 
@@ -215,9 +220,11 @@ async def create_mission_stream(
     report_chat = await _report_chat(db, user, can_write)
     email_to = await _email_to(db, user, can_write)
     owner = user.login if user else None
+    workspace = _workspace_owner(user, can_write)
     return _stream(
         lambda sink: MissionPlanner(
-            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to
+            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to,
+            workspace_owner=workspace,
         ).start(req.utterance, session_id, owner)
     )
 
@@ -244,7 +251,7 @@ async def resolve_approval(
         can_write = await _can_write(user, mission.session_id)
         planner = MissionPlanner(
             _registry(), can_write=can_write, report_chat_id=await _report_chat(db, user, can_write),
-            email_to=await _email_to(db, user, can_write),
+            email_to=await _email_to(db, user, can_write), workspace_owner=_workspace_owner(user, can_write),
         )
         return await planner.resolve_approval(mission.id, req.approved, req.reason)
     except WriteNotAllowed as exc:
@@ -270,8 +277,10 @@ async def resolve_approval_stream(
     can_write = await _can_write(user, mission.session_id)
     report_chat = await _report_chat(db, user, can_write)
     email_to = await _email_to(db, user, can_write)
+    workspace = _workspace_owner(user, can_write)
     return _stream(
         lambda sink: MissionPlanner(
-            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to
+            registry, on_event=sink, can_write=can_write, report_chat_id=report_chat, email_to=email_to,
+            workspace_owner=workspace,
         ).resolve_approval(mission.id, req.approved, req.reason)
     )
