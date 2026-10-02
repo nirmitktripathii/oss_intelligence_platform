@@ -34,8 +34,14 @@ _ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 SERVER_SET_ARGUMENTS: Dict[str, FrozenSet[str]] = {
     "send_report": frozenset({"chat_id"}),
     "send_email": frozenset({"to"}),  # the address the signed-in user confirmed with a code
-    "sandbox_clone": frozenset({"owner"}),  # whose saved work comes back: the signed-in user's own
+    # Whose saved sandbox work is listed, restored or deleted: the signed-in user's own.
+    "sandbox_clone": frozenset({"owner"}),
+    "list_saved_work": frozenset({"owner"}),
+    "delete_saved_work": frozenset({"owner"}),
 }
+
+_WORKSPACE_TOOLS = frozenset({"sandbox_clone", "list_saved_work", "delete_saved_work"})
+_SAVED_WORK_TOOLS = frozenset({"list_saved_work", "delete_saved_work"})
 
 
 def bare_name(qualified_name: str) -> str:
@@ -50,8 +56,14 @@ def is_email_tool(qualified_name: str) -> bool:
     return bare_name(qualified_name) == "send_email"
 
 
-def is_clone_tool(qualified_name: str) -> bool:
-    return bare_name(qualified_name) == "sandbox_clone"
+def is_workspace_tool(qualified_name: str) -> bool:
+    """Tools that act on the signed-in user's own saved sandbox work."""
+    return bare_name(qualified_name) in _WORKSPACE_TOOLS
+
+
+def is_saved_work_tool(qualified_name: str) -> bool:
+    """Workspace tools that mean nothing without a signed-in owner."""
+    return bare_name(qualified_name) in _SAVED_WORK_TOOLS
 
 
 def without_server_set(qualified_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:

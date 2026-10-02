@@ -3,7 +3,7 @@
 Sandboxes are deleted when idle, and on a free Render instance the whole disk is wiped whenever the
 service sleeps (15 minutes without traffic) or redeploys. So after every change a user's work is saved
 here (commits as patches, uncommitted edits as a diff) and sandbox_clone puts it back. One record per
-GitHub login and repo.
+GitHub login, repo and branch, so work on one issue never overwrites work on another.
 
 Postgres when GITCI_SAVE_DATABASE_URL is set, which survives restarts. Otherwise a local directory,
 which is fine on a laptop but is wiped along with the sandboxes on Render.
@@ -17,19 +17,34 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
+def size_of(data: Dict[str, Any]) -> int:
+    """What a record counts against its owner's space."""
+    return len(json.dumps(data).encode("utf-8"))
+
+
 class SavedStore:
-    async def get(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
+    """Records expire ``keep_days`` after their last save."""
+
+    async def get(self, owner: str, repo: str, branch: str) -> Optional[Dict[str, Any]]:
         raise NotImplementedError
 
-    async def put(self, owner: str, repo: str, data: Dict[str, Any]) -> None:
+    async def put(self, owner: str, repo: str, branch: str, data: Dict[str, Any]) -> None:
         raise NotImplementedError
 
-    async def delete(self, owner: str, repo: str) -> None:
+    async def delete(self, owner: str, repo: str, branch: str) -> None:
         raise NotImplementedError
+
+    async def list(self, owner: str) -> List[Dict[str, Any]]:
+        """Every live record of this owner, each with "repo", "branch", "bytes" and its data."""
+        raise NotImplementedError
+
+
+def _h(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:32]
 
 
 class FileStore(SavedStore):
@@ -37,27 +52,41 @@ class FileStore(SavedStore):
         self.root = Path(root)
         self.keep_seconds = keep_days * 86400
 
-    def _path(self, owner: str, repo: str) -> Path:
-        return self.root / (hashlib.sha256(f"{owner}/{repo}".encode()).hexdigest()[:32] + ".json")
+    def _path(self, owner: str, repo: str, branch: str) -> Path:
+        return self.root / _h(owner) / (_h(f"{repo}\n{branch}") + ".json")
 
-    async def get(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
-        p = self._path(owner, repo)
-        if not p.is_file():
+    def _read(self, p: Path) -> Optional[Dict[str, Any]]:
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
             return None
-        data = json.loads(p.read_text(encoding="utf-8"))
         if time.time() - data.get("saved_at", 0) > self.keep_seconds:
             p.unlink(missing_ok=True)
             return None
         return data
 
-    async def put(self, owner: str, repo: str, data: Dict[str, Any]) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        tmp = self._path(owner, repo).with_suffix(".tmp")
-        tmp.write_text(json.dumps(data), encoding="utf-8")
-        tmp.replace(self._path(owner, repo))
+    async def get(self, owner: str, repo: str, branch: str) -> Optional[Dict[str, Any]]:
+        p = self._path(owner, repo, branch)
+        return self._read(p) if p.is_file() else None
 
-    async def delete(self, owner: str, repo: str) -> None:
-        self._path(owner, repo).unlink(missing_ok=True)
+    async def put(self, owner: str, repo: str, branch: str, data: Dict[str, Any]) -> None:
+        p = self._path(owner, repo, branch)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({**data, "repo": repo, "branch": branch}), encoding="utf-8")
+        tmp.replace(p)
+
+    async def delete(self, owner: str, repo: str, branch: str) -> None:
+        self._path(owner, repo, branch).unlink(missing_ok=True)
+
+    async def list(self, owner: str) -> List[Dict[str, Any]]:
+        d = self.root / _h(owner)
+        out = []
+        for p in sorted(d.glob("*.json")) if d.is_dir() else []:
+            data = self._read(p)
+            if data:
+                out.append({**data, "bytes": size_of(data)})
+        return out
 
 
 def postgres_url(url: str) -> str:
@@ -79,9 +108,11 @@ class PostgresStore(SavedStore):
     _TABLE = """CREATE TABLE IF NOT EXISTS gitci_saved_work (
         owner text NOT NULL,
         repo text NOT NULL,
+        branch text NOT NULL,
         data jsonb NOT NULL,
+        bytes integer NOT NULL,
         saved_at timestamptz NOT NULL DEFAULT now(),
-        PRIMARY KEY (owner, repo))"""
+        PRIMARY KEY (owner, repo, branch))"""
 
     def __init__(self, url: str, keep_days: int):
         self.url = postgres_url(url)
@@ -97,30 +128,44 @@ class PostgresStore(SavedStore):
                 self._ready = True
             return fn(conn)
 
-    async def get(self, owner: str, repo: str) -> Optional[Dict[str, Any]]:
+    _LIVE = "saved_at > now() - make_interval(days => %s)"
+
+    async def get(self, owner: str, repo: str, branch: str) -> Optional[Dict[str, Any]]:
         def go(conn):
             row = conn.execute(
-                "SELECT data FROM gitci_saved_work WHERE owner = %s AND repo = %s "
-                "AND saved_at > now() - make_interval(days => %s)",
-                (owner, repo, self.keep_days),
+                f"SELECT data FROM gitci_saved_work WHERE owner = %s AND repo = %s AND branch = %s AND {self._LIVE}",
+                (owner, repo, branch, self.keep_days),
             ).fetchone()
             return row[0] if row else None
         return await asyncio.to_thread(self._run, go)
 
-    async def put(self, owner: str, repo: str, data: Dict[str, Any]) -> None:
+    async def put(self, owner: str, repo: str, branch: str, data: Dict[str, Any]) -> None:
         from psycopg.types.json import Jsonb
+
+        data = {**data, "repo": repo, "branch": branch}
 
         def go(conn):
             conn.execute(
-                "INSERT INTO gitci_saved_work (owner, repo, data, saved_at) VALUES (%s, %s, %s, now()) "
-                "ON CONFLICT (owner, repo) DO UPDATE SET data = EXCLUDED.data, saved_at = now()",
-                (owner, repo, Jsonb(data)),
+                "INSERT INTO gitci_saved_work (owner, repo, branch, data, bytes, saved_at) "
+                "VALUES (%s, %s, %s, %s, %s, now()) ON CONFLICT (owner, repo, branch) "
+                "DO UPDATE SET data = EXCLUDED.data, bytes = EXCLUDED.bytes, saved_at = now()",
+                (owner, repo, branch, Jsonb(data), size_of(data)),
             )
             conn.execute("DELETE FROM gitci_saved_work WHERE saved_at < now() - make_interval(days => %s)",
                          (self.keep_days,))
         await asyncio.to_thread(self._run, go)
 
-    async def delete(self, owner: str, repo: str) -> None:
+    async def delete(self, owner: str, repo: str, branch: str) -> None:
         def go(conn):
-            conn.execute("DELETE FROM gitci_saved_work WHERE owner = %s AND repo = %s", (owner, repo))
+            conn.execute("DELETE FROM gitci_saved_work WHERE owner = %s AND repo = %s AND branch = %s",
+                         (owner, repo, branch))
         await asyncio.to_thread(self._run, go)
+
+    async def list(self, owner: str) -> List[Dict[str, Any]]:
+        def go(conn):
+            rows = conn.execute(
+                f"SELECT data, bytes FROM gitci_saved_work WHERE owner = %s AND {self._LIVE} ORDER BY repo, branch",
+                (owner, self.keep_days),
+            ).fetchall()
+            return [{**data, "bytes": size} for data, size in rows]
+        return await asyncio.to_thread(self._run, go)

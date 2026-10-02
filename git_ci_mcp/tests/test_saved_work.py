@@ -1,5 +1,6 @@
 """Saved progress: a signed-in user's unfinished work outlives their sandbox (idle cleanup, reclaim,
-or a wiped disk) and comes back on their next sandbox_clone, unless its pull request is finished."""
+or a wiped disk). One record per user, repo and branch: work on one issue never overwrites work on
+another, sandbox_clone lists what is saved, and sandbox_clone with a branch puts that work back."""
 
 import asyncio
 import os
@@ -47,12 +48,14 @@ class Env:
         self.cfg.allowed_owners = ["o"]
         self.cfg.author_name, self.cfg.author_email = "Test", "test@example.com"
         self.cfg.max_sandboxes, self.cfg.sandbox_ttl_seconds, self.cfg.sandbox_reclaim_seconds = 15, 1800, 600
+        self.cfg.max_sandboxes_per_user, self.cfg.save_grace_seconds = 5, 86400
+        self.cfg.max_saved_branches, self.cfg.max_saved_bytes_per_user = 15, 100_000_000
         for key, value in cfg_overrides.items():
             setattr(self.cfg, key, value)
         self.mgr = SandboxManager(self.cfg, store=store, pr_state=pr_state)
 
-    async def clone(self, user="", fresh=False):
-        return await self.mgr.create(REPO, source=str(self.origin), user=user, fresh=fresh)
+    async def clone(self, user="", branch=None):
+        return await self.mgr.create(REPO, source=str(self.origin), user=user, branch=branch)
 
     def repo(self, sid):
         return Path(self.cfg.sandbox_root) / sid / "repo"
@@ -70,28 +73,35 @@ class Env:
         remove_tree(Path(self.cfg.sandbox_root))
         assert not Path(self.cfg.sandbox_root).exists()
 
-    async def half_done_fix(self, sid):
+    async def half_done_fix(self, sid, branch="fix-greeting"):
         """A branch with one commit, then an uncommitted edit and a brand-new file."""
-        await self.mgr.create_branch(sid, "fix-greeting")
+        await self.mgr.create_branch(sid, branch)
         await self.mgr.edit_file(sid, "a.txt", "hello", "hello world")
         await self.mgr.commit(sid, "Fix greeting")
         await self.mgr.edit_file(sid, "b.txt", "one", "two")
         (self.repo(sid) / "new.txt").write_text("brand new\n")
-        await self.mgr.edit_file(sid, "b.txt", "two", "three")  # any change saves
+        return await self.mgr.edit_file(sid, "b.txt", "two", "three")  # any change saves
+
+    async def saved(self, user="alice"):
+        return {(r["repo"], r["branch"]) for r in await self.mgr.store.list(user)}
 
 
 class BrokenStore(SavedStore):
-    async def get(self, owner, repo):
+    async def get(self, owner, repo, branch):
         return None
 
-    async def put(self, owner, repo, data):
+    async def put(self, owner, repo, branch, data):
         raise ConnectionError("database is down")
 
-    async def delete(self, owner, repo):
+    async def delete(self, owner, repo, branch):
         pass
 
+    async def list(self, owner):
+        return []
 
-def test_work_survives_a_wiped_disk_and_comes_back_on_the_next_clone(tmp_path):
+
+# ---------------------------------------------------------------- saving and resuming
+def test_work_survives_a_wiped_disk_and_comes_back_by_branch(tmp_path):
     env = Env(tmp_path)
 
     async def flow():
@@ -99,7 +109,13 @@ def test_work_survives_a_wiped_disk_and_comes_back_on_the_next_clone(tmp_path):
         await env.half_done_fix(sid)
         env.wipe_disk()  # no destroy, no warning: the save after each change is what counts
 
-        again = await env.clone("alice")
+        clean = await env.clone("alice")
+        assert clean["branch"] == "main" and "resumed" not in clean  # a clone without a branch starts clean
+        listed = clean["saved_work"]
+        assert [s["branch"] for s in listed] == ["fix-greeting"]
+        assert listed[0]["commits"] == 1 and listed[0]["last_commit"] == "Fix greeting"
+
+        again = await env.clone("alice", branch="fix-greeting")
         resumed = again["resumed"]
         assert resumed["restored"] is True
         assert again["branch"] == resumed["branch"] == "fix-greeting"
@@ -117,49 +133,112 @@ def test_work_survives_a_wiped_disk_and_comes_back_on_the_next_clone(tmp_path):
     asyncio.run(flow())
 
 
-def test_destroy_saves_first(tmp_path):
+def test_a_second_issue_in_another_conversation_never_touches_the_first(tmp_path):
+    """The bug this design fixes: with one record per repo, starting issue B overwrote issue A."""
     env = Env(tmp_path)
 
     async def flow():
-        sid = (await env.clone("alice"))["sandbox_id"]
-        await env.mgr.edit_file(sid, "a.txt", "hello", "hi")
-        await env.mgr.destroy(sid)
-        assert not env.exists(sid)
-        again = await env.clone("alice")
-        assert again["resumed"]["restored"] is True
-        assert (env.repo(again["sandbox_id"]) / "a.txt").read_text() == "hi\n"
+        a = (await env.clone("alice"))["sandbox_id"]  # conversation 1: issue A
+        await env.mgr.create_branch(a, "fix-a")
+        await env.mgr.edit_file(a, "a.txt", "hello", "A was here")
+        await env.mgr.commit(a, "Fix A")
+
+        b = (await env.clone("alice"))["sandbox_id"]  # conversation 2, same repo: issue B
+        assert env.exists(a) and env.exists(b)  # both conversations keep their sandbox
+        await env.mgr.create_branch(b, "fix-b")
+        await env.mgr.edit_file(b, "b.txt", "one", "B was here")
+        await env.mgr.edit_file(a, "b.txt", "one", "A again")  # and A carries on meanwhile
+        assert await env.saved() == {("o/r", "fix-a"), ("o/r", "fix-b")}
+
+        env.wipe_disk()
+        ra = env.repo((await env.clone("alice", branch="fix-a"))["sandbox_id"])
+        rb = env.repo((await env.clone("alice", branch="fix-b"))["sandbox_id"])
+        assert (ra / "a.txt").read_text() == "A was here\n" and (ra / "b.txt").read_text() == "A again\n"
+        assert (rb / "a.txt").read_text() == "hello\n" and (rb / "b.txt").read_text() == "B was here\n"
 
     asyncio.run(flow())
 
 
-def test_fresh_starts_clean_but_keeps_the_saved_work(tmp_path):
+def test_two_sandboxes_on_one_branch_never_overwrite_each_other(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        first = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.edit_file(first, "a.txt", "hello", "first")  # on main: saved as 'main'
+        second = (await env.clone("alice"))["sandbox_id"]
+        out = await env.mgr.edit_file(second, "b.txt", "one", "second")
+        assert out["saved"] is False and "create_branch" in out["save_warning"]
+        saved = await env.mgr.store.get("alice", "o/r", "main")
+        assert "first" in saved["uncommitted_patch"] and "second" not in saved["uncommitted_patch"]
+
+        # A new branch is a new record, so the second sandbox's work is saved from there on.
+        out = await env.mgr.create_branch(second, "fix-b")
+        assert "save_warning" not in out
+        assert await env.saved() == {("o/r", "main"), ("o/r", "fix-b")}
+
+    asyncio.run(flow())
+
+
+def test_a_branch_name_with_saved_work_is_not_reused_for_new_work(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        sid = (await env.clone("alice"))["sandbox_id"]
+        await env.half_done_fix(sid, "fix-x")
+        other = (await env.clone("alice"))["sandbox_id"]
+        with pytest.raises(GitCiError, match="branch='fix-x'"):
+            await env.mgr.create_branch(other, "fix-x")
+        # Bob has his own records, so the same name is fine for him.
+        bob = (await env.clone("bob"))["sandbox_id"]
+        assert (await env.mgr.create_branch(bob, "fix-x"))["branch"] == "fix-x"
+
+    asyncio.run(flow())
+
+
+def test_resuming_a_branch_that_is_open_elsewhere_continues_from_its_latest_work(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        old = (await env.clone("alice"))["sandbox_id"]
+        await env.half_done_fix(old)
+        new = await env.clone("alice", branch="fix-greeting")
+        assert not env.exists(old)  # one sandbox per branch: the open one was saved, then closed
+        assert (env.repo(new["sandbox_id"]) / "b.txt").read_text() == "three\n"
+
+    asyncio.run(flow())
+
+
+def test_resuming_a_branch_with_nothing_saved_says_what_is(tmp_path):
     env = Env(tmp_path)
 
     async def flow():
         sid = (await env.clone("alice"))["sandbox_id"]
         await env.half_done_fix(sid)
-        clean = await env.clone("alice", fresh=True)
-        assert "resumed" not in clean and clean["branch"] == "main"
-        assert (env.repo(clean["sandbox_id"]) / "a.txt").read_text() == "hello\n"
-        # fresh does not throw the saved work away, and the clean sandbox has nothing to overwrite it
-        await env.mgr.destroy(clean["sandbox_id"])
-        assert (await env.clone("alice"))["resumed"]["restored"] is True
+        with pytest.raises(GitCiError, match="Saved branches: fix-greeting"):
+            await env.clone("alice", branch="fix-other")
+        with pytest.raises(GitCiError, match="sign in"):
+            await env.clone("", branch="fix-greeting")
 
     asyncio.run(flow())
 
 
-def test_each_user_has_one_sandbox_per_repo(tmp_path):
+def test_destroy_saves_first_and_discard_does_not(tmp_path):
     env = Env(tmp_path)
 
     async def flow():
-        first = (await env.clone("alice"))["sandbox_id"]
-        await env.mgr.edit_file(first, "a.txt", "hello", "hi")
-        second = (await env.clone("alice"))["sandbox_id"]
-        bob = (await env.clone("bob"))["sandbox_id"]
-        assert not env.exists(first)  # replaced, and its work carried over
-        assert env.exists(second) and env.exists(bob)
-        assert (env.repo(second) / "a.txt").read_text() == "hi\n"
-        assert (env.repo(bob) / "a.txt").read_text() == "hello\n"  # nobody sees another user's work
+        sid = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.edit_file(sid, "a.txt", "hello", "hi")
+        assert await env.mgr.destroy(sid) == {"destroyed": True, "saved": True}
+        assert not env.exists(sid)
+        again = await env.clone("alice", branch="main")
+        assert again["resumed"]["restored"] is True
+        assert (env.repo(again["sandbox_id"]) / "a.txt").read_text() == "hi\n"
+
+        throwaway = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(throwaway, "fix-junk")
+        await env.mgr.store.delete("alice", "o/r", "fix-junk")
+        await env.mgr.destroy(throwaway, discard=True)
+        assert not env.exists(throwaway) and ("o/r", "fix-junk") not in await env.saved()
 
     asyncio.run(flow())
 
@@ -171,8 +250,199 @@ def test_anonymous_sandboxes_are_not_saved(tmp_path):
         sid = (await env.clone())["sandbox_id"]
         await env.mgr.edit_file(sid, "a.txt", "hello", "hi")
         await env.mgr.destroy(sid)
-        assert "resumed" not in await env.clone()
+        assert "saved_work" not in await env.clone()
         assert not Path(env.cfg.save_dir).exists() or not any(Path(env.cfg.save_dir).iterdir())
+
+    asyncio.run(flow())
+
+
+def test_bytecode_and_test_caches_are_not_part_of_the_saved_work(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        sid = (await env.clone("alice"))["sandbox_id"]
+        cache = env.repo(sid) / "pkg" / "__pycache__"
+        cache.mkdir(parents=True)
+        (cache / "m.cpython-312.pyc").write_bytes(b"\x00\x01")
+        (env.repo(sid) / ".pytest_cache").mkdir()
+        (env.repo(sid) / ".pytest_cache" / "v").write_text("x")
+        await env.mgr.edit_file(sid, "a.txt", "hello", "hi")
+        env.wipe_disk()
+        again = await env.clone("alice", branch="main")
+        assert again["resumed"]["files_changed"] == ["a.txt"]
+        assert not (env.repo(again["sandbox_id"]) / "pkg").exists()
+
+    asyncio.run(flow())
+
+
+# ---------------------------------------------------------------- stacked branches
+def test_a_stacked_branch_targets_its_parent_and_comes_back_whole(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        sid = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(sid, "fix-a")
+        await env.mgr.edit_file(sid, "a.txt", "hello", "step one")
+        await env.mgr.commit(sid, "Step one")
+        assert await env.mgr.pr_base(sid) == {"base": "main"}
+        await env.mgr.push_branch(sid, "token")  # fix-a is on GitHub, with its own pull request
+
+        made = await env.mgr.create_branch(sid, "fix-b")
+        assert made["stacked_on"] == "fix-a"
+        await env.mgr.edit_file(sid, "b.txt", "one", "step two")
+        await env.mgr.commit(sid, "Step two")
+        assert await env.mgr.pr_base(sid) == {"base": "fix-a"}  # only step two shows in its pull request
+
+        # A third branch on an unpushed parent targets main for now, and says why.
+        await env.mgr.create_branch(sid, "fix-c")
+        target = await env.mgr.pr_base(sid)
+        assert target["base"] == "main" and "fix-b" in target["note"]
+
+        env.wipe_disk()
+        again = await env.clone("alice", branch="fix-b")
+        assert again["resumed"]["stacked_on"] == "fix-a" and again["resumed"]["commits"] == 2
+        repo = env.repo(again["sandbox_id"])
+        assert _git(repo, "log", "--format=%s", "-2").split("\n")[:2] == ["Step two", "Step one"]
+        assert await env.mgr.pr_base(again["sandbox_id"]) == {"base": "fix-a"}
+        listed = (await env.mgr.list_saved("alice"))["saved_work"]
+        assert {s["branch"]: s["stacked_on"] for s in listed} == {"fix-a": None, "fix-b": "fix-a", "fix-c": "fix-b"}
+
+    asyncio.run(flow())
+
+
+def test_the_draft_pr_tool_uses_the_stacked_base():
+    tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "draft_pr")
+    assert "stacked" in tool.description
+
+
+# ---------------------------------------------------------------- limits
+def test_a_user_at_their_branch_limit_must_delete_some_to_save_more(tmp_path):
+    env = Env(tmp_path, max_saved_branches=2)
+
+    async def flow():
+        for name in ("fix-1", "fix-2"):
+            sid = (await env.clone("alice"))["sandbox_id"]
+            await env.mgr.create_branch(sid, name)
+        third = (await env.clone("alice"))["sandbox_id"]
+        out = await env.mgr.create_branch(third, "fix-3")
+        assert out["branch"] == "fix-3"  # the branch is made; only saving it is refused
+        assert out["saved"] is False and "2 of 2 branches" in out["save_warning"]
+        assert "delete_saved_work" in out["save_warning"]
+        with pytest.raises(GitCiError, match="not deleted"):
+            await env.mgr.destroy(third)  # unsaved work is never thrown away silently
+        assert env.exists(third)
+
+        listed = await env.mgr.list_saved("alice", REPO)
+        assert (listed["branches_used"], listed["branches_limit"]) == (2, 2)
+        await env.mgr.delete_saved("alice", REPO, "fix-1")
+        out = await env.mgr.edit_file(third, "a.txt", "hello", "hi")
+        assert "save_warning" not in out
+        assert await env.saved() == {("o/r", "fix-2"), ("o/r", "fix-3")}
+        assert (await env.clone("bob"))["sandbox_id"]  # other users are not affected
+
+    asyncio.run(flow())
+
+
+def test_a_user_at_their_space_limit_must_delete_some_to_save_more(tmp_path):
+    env = Env(tmp_path, max_saved_bytes_per_user=7000)
+
+    async def flow():
+        first = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(first, "fix-first")
+        (env.repo(first) / "first.txt").write_text("y" * 3000)
+        assert "save_warning" not in await env.mgr.edit_file(first, "a.txt", "hello", "hi")
+
+        big = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(big, "fix-big")
+        (env.repo(big) / "big.txt").write_text("x" * 5000)
+        out = await env.mgr.edit_file(big, "a.txt", "hello", "hey")  # about 3 KB + 5 KB > 7 KB
+        assert out["saved"] is False and "MB" in out["save_warning"]
+        # The last version of fix-big that fitted is still there; the change is not lost while the sandbox is open.
+        assert "big.txt" not in (await env.mgr.store.get("alice", "o/r", "fix-big"))["files"]
+
+        await env.mgr.delete_saved("alice", REPO, "fix-first")
+        assert "save_warning" not in await env.mgr.edit_file(big, "b.txt", "one", "two")
+        assert "big.txt" in (await env.mgr.store.get("alice", "o/r", "fix-big"))["files"]
+
+    asyncio.run(flow())
+
+
+def test_finished_pull_requests_free_their_space_by_themselves(tmp_path):
+    states = {}
+
+    async def pr_state(url):
+        return states.get(url, "open")
+
+    env = Env(tmp_path, pr_state=pr_state, max_saved_branches=1)
+
+    async def flow():
+        sid = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(sid, "fix-1")
+        await env.mgr.record_pr(sid, "https://github.com/o/r/pull/1")
+        nxt = (await env.clone("alice"))["sandbox_id"]
+        assert (await env.mgr.create_branch(nxt, "fix-2"))["saved"] is False  # full, and #1 is still open
+        states["https://github.com/o/r/pull/1"] = "merged"
+        assert "save_warning" not in await env.mgr.edit_file(nxt, "a.txt", "hello", "hi")
+        assert await env.saved() == {("o/r", "fix-2")}
+
+    asyncio.run(flow())
+
+
+def test_list_saved_work_drops_finished_work_and_shows_usage(tmp_path):
+    async def pr_state(url):
+        return "closed" if url.endswith("/1") else "open"
+
+    env = Env(tmp_path, pr_state=pr_state)
+
+    async def flow():
+        for name, pr in (("fix-1", "https://github.com/o/r/pull/1"), ("fix-2", "https://github.com/o/r/pull/2")):
+            sid = (await env.clone("alice"))["sandbox_id"]
+            await env.mgr.create_branch(sid, name)
+            await env.mgr.record_pr(sid, pr)
+        listed = await env.mgr.list_saved("alice")
+        assert [s["branch"] for s in listed["saved_work"]] == ["fix-2"]
+        assert listed["saved_work"][0]["pull_request"] == "https://github.com/o/r/pull/2"
+        assert (listed["branches_used"], listed["branches_limit"], listed["mb_limit"]) == (1, 15, 100.0)
+        assert listed["kept_days_after_last_change"] == 90
+        assert (await env.mgr.list_saved("bob"))["saved_work"] == []
+        with pytest.raises(GitCiError, match="sign in"):
+            await env.mgr.list_saved("")
+
+    asyncio.run(flow())
+
+
+def test_deleting_saved_work_closes_its_open_sandbox(tmp_path):
+    env = Env(tmp_path)
+
+    async def flow():
+        sid = (await env.clone("alice"))["sandbox_id"]
+        await env.half_done_fix(sid)
+        other = (await env.clone("alice"))["sandbox_id"]
+        assert await env.mgr.delete_saved("alice", REPO, "fix-greeting") == {
+            "deleted": True, "repo": "o/r", "branch": "fix-greeting"}
+        assert not env.exists(sid) and env.exists(other)  # or it would save the work right back
+        assert await env.saved() == set()
+        with pytest.raises(GitCiError, match="no saved work"):
+            await env.mgr.delete_saved("alice", REPO, "fix-greeting")
+        with pytest.raises(GitCiError, match="no saved work"):
+            await env.mgr.delete_saved("bob", REPO, "fix-greeting")  # nobody deletes another user's work
+
+    asyncio.run(flow())
+
+
+def test_each_user_has_at_most_their_share_of_sandboxes(tmp_path):
+    env = Env(tmp_path, max_sandboxes_per_user=2)
+
+    async def flow():
+        first = (await env.clone("alice"))["sandbox_id"]
+        await env.mgr.create_branch(first, "fix-1")
+        second = (await env.clone("alice"))["sandbox_id"]
+        bob = (await env.clone("bob"))["sandbox_id"]
+        env.age(first, 60)
+        third = (await env.clone("alice"))["sandbox_id"]
+        assert not env.exists(first)  # her longest idle one was saved and closed
+        assert env.exists(second) and env.exists(third) and env.exists(bob)
+        assert ("o/r", "fix-1") in await env.saved()
 
     asyncio.run(flow())
 
@@ -190,28 +460,33 @@ def test_a_full_pool_saves_the_idle_sandbox_before_reclaiming_it(tmp_path):
 
         # Alice comes back later, once another sandbox has gone idle.
         env.age(carol, 700)
-        again = await env.clone("alice")
+        again = await env.clone("alice", branch="main")
         assert again["resumed"]["restored"] is True
         assert (env.repo(again["sandbox_id"]) / "a.txt").read_text() == "hi\n"
 
     asyncio.run(flow())
 
 
-def test_a_sandbox_whose_work_cannot_be_saved_is_never_deleted(tmp_path):
-    env = Env(tmp_path, store=BrokenStore(), max_sandboxes=1)
+def test_a_change_that_cannot_be_saved_says_so_and_its_sandbox_is_kept(tmp_path):
+    env = Env(tmp_path, store=BrokenStore(), max_sandboxes=1, save_grace_seconds=3000)
 
     async def flow():
         sid = (await env.clone("alice"))["sandbox_id"]
-        await env.mgr.edit_file(sid, "a.txt", "hello", "hi")  # the change works; only the save failed
+        out = await env.mgr.edit_file(sid, "a.txt", "hello", "hi")  # the change works; only the save failed
+        assert out["saved"] is False and "lost if the server restarts" in out["save_warning"]
         with pytest.raises(GitCiError, match="could not be saved"):
             await env.mgr.destroy(sid)
         env.age(sid, 900)
         with pytest.raises(GitCiError, match="in use"):
             await env.clone("bob")  # not reclaimed either
-        env.age(sid, 2000)
+        env.age(sid, 1200)
         with pytest.raises(GitCiError, match="in use"):
-            await env.clone("bob")  # nor deleted as abandoned
+            await env.clone("bob")  # nor deleted as abandoned, within the grace period
         assert env.exists(sid) and (env.repo(sid) / "a.txt").read_text() == "hi\n"
+
+        env.age(sid, 1000)  # idle past the grace period: deleted, so the pool cannot stay stuck
+        assert (await env.clone("bob"))["sandbox_id"]
+        assert not env.exists(sid)
 
     asyncio.run(flow())
 
@@ -222,32 +497,14 @@ def test_work_too_large_to_save_keeps_its_sandbox(tmp_path):
     async def flow():
         sid = (await env.clone("alice"))["sandbox_id"]
         (env.repo(sid) / "big.txt").write_text("x" * 500)
-        with pytest.raises(GitCiError, match="could not be saved"):
+        with pytest.raises(GitCiError, match="larger than 50 bytes"):
             await env.mgr.destroy(sid)
         assert env.exists(sid)
 
     asyncio.run(flow())
 
 
-def test_bytecode_and_test_caches_are_not_part_of_the_saved_work(tmp_path):
-    env = Env(tmp_path)
-
-    async def flow():
-        sid = (await env.clone("alice"))["sandbox_id"]
-        cache = env.repo(sid) / "pkg" / "__pycache__"
-        cache.mkdir(parents=True)
-        (cache / "m.cpython-312.pyc").write_bytes(b"\x00\x01")
-        (env.repo(sid) / ".pytest_cache").mkdir()
-        (env.repo(sid) / ".pytest_cache" / "v").write_text("x")
-        await env.mgr.edit_file(sid, "a.txt", "hello", "hi")
-        env.wipe_disk()
-        again = await env.clone("alice")
-        assert again["resumed"]["files_changed"] == ["a.txt"]
-        assert not (env.repo(again["sandbox_id"]) / "pkg").exists()
-
-    asyncio.run(flow())
-
-
+# ---------------------------------------------------------------- pull requests
 @pytest.mark.parametrize("state", ["merged", "closed"])
 def test_work_whose_pull_request_is_finished_is_not_put_back(tmp_path, state):
     async def pr_state(url):
@@ -260,11 +517,11 @@ def test_work_whose_pull_request_is_finished_is_not_put_back(tmp_path, state):
         await env.half_done_fix(sid)
         await env.mgr.record_pr(sid, "https://github.com/o/r/pull/7")
         env.wipe_disk()
-        again = await env.clone("alice")
+        again = await env.clone("alice", branch="fix-greeting")
         assert again["resumed"]["restored"] is False
         assert again["resumed"]["pull_request_state"] == state
         assert again["branch"] == "main"
-        assert await env.mgr.store.get("alice", "o/r") is None  # done with: dropped
+        assert await env.mgr.store.get("alice", "o/r", "fix-greeting") is None  # done with: dropped
 
     asyncio.run(flow())
 
@@ -287,7 +544,7 @@ def test_work_with_an_open_pull_request_resumes_on_the_pushed_branch(tmp_path):
         await env.mgr.commit(sid, "Follow-up")  # after the push: only this is in the saved patch
         env.wipe_disk()
 
-        again = await env.clone("alice")
+        again = await env.clone("alice", branch="fix-greeting")
         resumed = again["resumed"]
         assert resumed["restored"] is True and resumed["pull_request"] == "https://github.com/o/r/pull/7"
         repo = env.repo(again["sandbox_id"])
@@ -310,20 +567,21 @@ def test_saved_work_that_no_longer_applies_is_kept_and_the_sandbox_starts_clean(
         # Someone rewrote a.txt on the base branch since.
         (env.origin / "a.txt").write_text("completely different\n")
         _git(env.origin, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-am", "rewrite")
-        data = await env.mgr.store.get("alice", "o/r")
+        data = await env.mgr.store.get("alice", "o/r", "main")
         data["base_sha"] = "f" * 40  # and the old base is gone (force-push)
-        await env.mgr.store.put("alice", "o/r", data)
+        await env.mgr.store.put("alice", "o/r", "main", data)
 
-        again = await env.clone("alice")
+        again = await env.clone("alice", branch="main")
         assert again["resumed"]["restored"] is False and "kept" in again["resumed"]["note"]
         repo = env.repo(again["sandbox_id"])
         assert again["branch"] == "main" and _git(repo, "status", "--porcelain").strip() == ""
         assert (repo / "a.txt").read_text() == "completely different\n"
-        assert await env.mgr.store.get("alice", "o/r") is not None
+        assert await env.mgr.store.get("alice", "o/r", "main") is not None
 
     asyncio.run(flow())
 
 
+# ---------------------------------------------------------------- inputs and tools
 @pytest.mark.parametrize("owner", ["not a login", "../x", "a" * 40])
 def test_the_owner_must_be_a_github_login(tmp_path, owner):
     env = Env(tmp_path)
@@ -346,24 +604,35 @@ def test_test_runs_wait_for_a_slot_then_ask_to_retry(tmp_path):
     asyncio.run(flow())
 
 
-def test_sandbox_clone_takes_fresh_and_a_system_set_owner():
-    tool = next(t for t in asyncio.run(mcp.list_tools()) if t.name == "sandbox_clone")
-    schema = getattr(tool, "inputSchema", None) or tool.input_schema
-    assert {"fresh", "owner"} <= set(schema["properties"])
-    assert "set by the system" in tool.description
+def test_saved_work_tools_take_a_system_set_owner():
+    tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
+    for name, params in (("sandbox_clone", {"branch", "owner"}), ("list_saved_work", {"owner"}),
+                         ("delete_saved_work", {"repo_url", "branch", "owner"})):
+        schema = getattr(tools[name], "inputSchema", None) or tools[name].input_schema
+        assert params <= set(schema["properties"]), name
+        assert "set by the system" in tools[name].description
+    clone = getattr(tools["sandbox_clone"], "inputSchema", None) or tools["sandbox_clone"].input_schema
+    assert "fresh" not in clone["properties"]
+    destroy = getattr(tools["destroy_sandbox"], "inputSchema", None) or tools["destroy_sandbox"].input_schema
+    assert "discard" in destroy["properties"]
 
 
 # ---------------------------------------------------------------- stores
-def test_file_store_expires_old_work(tmp_path):
-    store = FileStore(str(tmp_path), keep_days=14)
+def test_file_store_keeps_one_record_per_branch_and_expires_old_ones(tmp_path):
+    store = FileStore(str(tmp_path), keep_days=90)
 
     async def flow():
-        await store.put("alice", "o/r", {"saved_at": time.time()})
-        assert await store.get("alice", "o/r")
-        assert await store.get("bob", "o/r") is None
-        await store.put("alice", "o/r", {"saved_at": time.time() - 15 * 86400})
-        assert await store.get("alice", "o/r") is None
-        await store.delete("alice", "o/r")
+        await store.put("alice", "o/r", "fix-a", {"saved_at": time.time()})
+        await store.put("alice", "o/r", "fix-b", {"saved_at": time.time()})
+        assert (await store.get("alice", "o/r", "fix-a"))["branch"] == "fix-a"
+        assert await store.get("bob", "o/r", "fix-a") is None
+        assert sorted(r["branch"] for r in await store.list("alice")) == ["fix-a", "fix-b"]
+        assert all(r["bytes"] > 0 for r in await store.list("alice"))
+        await store.put("alice", "o/r", "fix-a", {"saved_at": time.time() - 91 * 86400})
+        assert await store.get("alice", "o/r", "fix-a") is None
+        assert [r["branch"] for r in await store.list("alice")] == ["fix-b"]
+        await store.delete("alice", "o/r", "fix-b")
+        assert await store.list("alice") == []
 
     asyncio.run(flow())
 
@@ -392,35 +661,47 @@ def postgres():
 def test_postgres_store_round_trip_and_expiry(postgres):
     import psycopg
 
-    store = PostgresStore(postgres, keep_days=14)
+    store = PostgresStore(postgres, keep_days=90)
 
     async def flow():
-        await store.delete("alice", "o/r")
-        assert await store.get("alice", "o/r") is None
-        await store.put("alice", "o/r", {"branch": "fix-a", "commits_patch": "x\r\n\x7f"})
-        await store.put("alice", "o/r", {"branch": "fix-b"})  # upsert
-        assert (await store.get("alice", "o/r"))["branch"] == "fix-b"
-        assert await store.get("bob", "o/r") is None
         with psycopg.connect(store.url, autocommit=True) as conn:
-            conn.execute("UPDATE gitci_saved_work SET saved_at = now() - interval '15 days'")
-        assert await store.get("alice", "o/r") is None
-        await store.delete("alice", "o/r")
+            conn.execute("DROP TABLE IF EXISTS gitci_saved_work")
+        store._ready = False
+        assert await store.get("alice", "o/r", "fix-a") is None
+        await store.put("alice", "o/r", "fix-a", {"commits_patch": "x\r\n\x7f"})
+        await store.put("alice", "o/r", "fix-b", {"last_commit": "one"})
+        await store.put("alice", "o/r", "fix-b", {"last_commit": "two"})  # upsert
+        assert (await store.get("alice", "o/r", "fix-a"))["commits_patch"] == "x\r\n\x7f"
+        assert (await store.get("alice", "o/r", "fix-b"))["last_commit"] == "two"
+        assert await store.get("bob", "o/r", "fix-a") is None
+        listed = await store.list("alice")
+        assert [r["branch"] for r in listed] == ["fix-a", "fix-b"] and all(r["bytes"] > 0 for r in listed)
+        with psycopg.connect(store.url, autocommit=True) as conn:
+            conn.execute("UPDATE gitci_saved_work SET saved_at = now() - interval '91 days' WHERE branch = 'fix-a'")
+        assert await store.get("alice", "o/r", "fix-a") is None
+        assert [r["branch"] for r in await store.list("alice")] == ["fix-b"]
+        await store.delete("alice", "o/r", "fix-b")
+        assert await store.list("alice") == []
 
     asyncio.run(flow())
 
 
 def test_resume_through_postgres(tmp_path, postgres):
-    env = Env(tmp_path, store=PostgresStore(postgres, keep_days=14))
+    env = Env(tmp_path, store=PostgresStore(postgres, keep_days=90))
 
     async def flow():
-        await env.mgr.store.delete("alice", "o/r")
+        for r in await env.mgr.store.list("alice"):
+            await env.mgr.store.delete("alice", r["repo"], r["branch"])
         sid = (await env.clone("alice"))["sandbox_id"]
         await env.half_done_fix(sid)
+        await env.half_done_fix((await env.clone("alice"))["sandbox_id"], "fix-other")
         env.wipe_disk()
-        again = await env.clone("alice")
+        again = await env.clone("alice", branch="fix-greeting")
         assert again["resumed"]["restored"] is True
         assert (env.repo(again["sandbox_id"]) / "b.txt").read_text() == "three\n"
-        await env.mgr.store.delete("alice", "o/r")
+        assert {s["branch"] for s in (await env.mgr.list_saved("alice"))["saved_work"]} == {"fix-greeting", "fix-other"}
+        for name in ("fix-greeting", "fix-other"):
+            await env.mgr.store.delete("alice", "o/r", name)
 
     asyncio.run(flow())
 
