@@ -21,10 +21,12 @@ import logging
 from typing import Any, Awaitable, Callable, Dict, Optional, Set
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.planner import EventSink, MissionNotFound, MissionPlanner, MissionStateError, WriteNotAllowed
 from app.agent.store import mission_store
 from app.agent.tools import AgentConfigError, ToolRegistry, configured_registry
 from app.config import settings
+from app.database import get_db
 from app.schemas.agent import (
     AgentTool,
     AgentToolsResponse,
@@ -35,6 +37,7 @@ from app.schemas.agent import (
 )
 from app.security.auth import AuthUser, may_write, optional_user
 from app.security.rate_limiter import limiter
+from app.telegram_link import service as telegram_links
 
 logger = logging.getLogger("gitscout.agent")
 
@@ -90,6 +93,17 @@ async def _can_write(user: Optional[AuthUser], session_id: Optional[str]) -> boo
         return True
     owner = await mission_store.session_owner(session_id)
     return owner is not None and owner.lower() == user.login.lower()
+
+
+async def _report_chat(db: AsyncSession, user: Optional[AuthUser], can_write: bool) -> Optional[str]:
+    """
+    The Telegram chat this signed-in user linked, for the planner to aim ``send_report`` at; ``None``
+    if they have not linked one. Only someone who may write has a use for it, and it is always the
+    caller's own, never anything taken from the request body or the model.
+    """
+    if not can_write or user is None:
+        return None
+    return await telegram_links.chat_for(db, user.login)
 
 
 async def _require_write_rights(user: Optional[AuthUser], mission: Mission) -> None:
@@ -163,6 +177,7 @@ async def list_tools():
 async def create_mission(
     request: Request, response: Response, req: MissionCreateRequest,
     x_session_token: Optional[str] = Header(None), user: Optional[AuthUser] = Depends(optional_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Plan and run a spoken request. Returns once the mission completes, fails, or reaches a
@@ -171,7 +186,8 @@ async def create_mission(
     """
     registry = _registry()
     session_id = await _session_for(req, x_session_token)
-    planner = MissionPlanner(registry, can_write=await _can_write(user, session_id))
+    can_write = await _can_write(user, session_id)
+    planner = MissionPlanner(registry, can_write=can_write, report_chat_id=await _report_chat(db, user, can_write))
     return await planner.start(req.utterance, session_id, owner=user.login if user else None)
 
 
@@ -179,15 +195,18 @@ async def create_mission(
 @limiter.limit(_mission_rate_limit)
 async def create_mission_stream(
     request: Request, req: MissionCreateRequest, x_session_token: Optional[str] = Header(None),
-    user: Optional[AuthUser] = Depends(optional_user),
+    user: Optional[AuthUser] = Depends(optional_user), db: AsyncSession = Depends(get_db),
 ):
     """Same as ``POST /missions``, streaming progress events; the last event is the mission."""
     registry = _registry()
     session_id = await _session_for(req, x_session_token)
     can_write = await _can_write(user, session_id)
+    report_chat = await _report_chat(db, user, can_write)
     owner = user.login if user else None
     return _stream(
-        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write).start(req.utterance, session_id, owner)
+        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write, report_chat_id=report_chat).start(
+            req.utterance, session_id, owner
+        )
     )
 
 
@@ -201,6 +220,7 @@ async def get_mission(mission: Mission = Depends(_owned_mission)):
 async def resolve_approval(
     request: Request, response: Response, req: ApprovalRequest,
     mission: Mission = Depends(_owned_mission), user: Optional[AuthUser] = Depends(optional_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Answer a mission's approval gate. Approving runs the pending tool with the arguments
@@ -209,7 +229,10 @@ async def resolve_approval(
     if req.approved:
         await _require_write_rights(user, mission)
     try:
-        planner = MissionPlanner(_registry(), can_write=await _can_write(user, mission.session_id))
+        can_write = await _can_write(user, mission.session_id)
+        planner = MissionPlanner(
+            _registry(), can_write=can_write, report_chat_id=await _report_chat(db, user, can_write)
+        )
         return await planner.resolve_approval(mission.id, req.approved, req.reason)
     except WriteNotAllowed as exc:
         raise HTTPException(status_code=403, detail=str(exc))
@@ -223,7 +246,7 @@ async def resolve_approval(
 @limiter.limit(_mission_rate_limit)
 async def resolve_approval_stream(
     request: Request, req: ApprovalRequest, mission: Mission = Depends(_owned_mission),
-    user: Optional[AuthUser] = Depends(optional_user),
+    user: Optional[AuthUser] = Depends(optional_user), db: AsyncSession = Depends(get_db),
 ):
     """Same as the approval endpoint, streaming progress events; the last event is the mission."""
     registry = _registry()
@@ -232,8 +255,9 @@ async def resolve_approval_stream(
     if req.approved:
         await _require_write_rights(user, mission)
     can_write = await _can_write(user, mission.session_id)
+    report_chat = await _report_chat(db, user, can_write)
     return _stream(
-        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write).resolve_approval(
+        lambda sink: MissionPlanner(registry, on_event=sink, can_write=can_write, report_chat_id=report_chat).resolve_approval(
             mission.id, req.approved, req.reason
         )
     )

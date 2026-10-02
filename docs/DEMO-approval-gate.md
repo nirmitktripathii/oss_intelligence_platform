@@ -99,15 +99,31 @@ The hosted agent can only change things if the Git/CI MCP server is deployed and
    (it runs their tests on the server). Keep it to accounts you control.
 4. `gitscout-api` lists the server in `AGENT_MCP_SERVERS` with `"bearer_env": "GITCI_MCP_TOKEN"`:
    the token is read from the environment, never from that JSON.
-5. **Telegram report (optional).** The `send_report` tool messages you when a mission is done. Create a
-   bot with `@BotFather`, send it any message, and find your chat id (for example with `@userinfobot`).
-   Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` on the `git-ci-mcp` service in the Render dashboard
-   only (they are `sync: false` in `render.yaml`). The recipient is that one chat: the tool takes no
-   address, the text is a fixed template with capped fields sent as plain text, the link must be a pull
-   request in an allowed repo, and it is limited to `GITCI_REPORTS_PER_HOUR` (default 10). Like every
-   write, it asks for approval, and the approval card shows the exact message. Without the two values
-   the tool answers that reports are not set up. Test commands run without these variables, so a
-   repository's tests cannot read them.
+5. **Telegram report (optional), one chat per signed-in user.** The `send_report` tool messages the
+   person who ran the mission. Create a bot with `@BotFather` and set `TELEGRAM_BOT_TOKEN` on both
+   `gitscout-api` and `git-ci-mcp`. On `gitscout-api` also set `TELEGRAM_WEBHOOK_SECRET` (make up a
+   string of letters, digits, `_` and `-`) and `TELEGRAM_WEBHOOK_URL`
+   (`https://<api host>/api/v1/telegram/webhook`); the API registers the webhook with Telegram on
+   startup. All of these are set in the Render dashboard only (`sync: false`).
+
+   How a visitor gets reports: on `/alexa`, signed in, they press **Link Telegram**. The page opens a
+   one-time `t.me/<bot>?start=<code>` link (it expires in 10 minutes, works once, and only its hash is
+   stored); pressing Start in Telegram sends the code to the webhook, which stores that chat against
+   their GitHub login. The bot replies naming the account and offering `/stop`. **Unlink** on the page
+   or `/stop` in the chat removes it. Only private chats can be linked.
+
+   Who can be messaged: only the chat the signed-in owner of the conversation linked. The model never
+   sees or sets the recipient: the backend looks it up and adds it to the call, and drops any `chat_id`
+   the model supplies. A user who has not linked is not offered the tool and the assistant tells them
+   to press Link Telegram. The Git/CI server accepts the chat id only from the backend (it holds the
+   bearer token), validates it as digits, and caps reports per chat (`GITCI_REPORTS_PER_HOUR`, default
+   10) and overall (`GITCI_REPORTS_GLOBAL_PER_HOUR`, default 60). The text is a fixed template with
+   capped fields sent as plain text, and the link must be a pull request in an allowed repo. Like every
+   write, it asks for approval, and the approval card shows the exact message. Test commands run
+   without these variables, so a repository's tests cannot read them.
+
+   Note: a bot has one webhook. If the same bot was ever polled with `getUpdates` by another program
+   (an earlier alert bot), registering the webhook stops that.
 6. A full mission (clone, find, branch, read, test, edit, test, diff, commit, draft PR, report) is about
    thirteen tool calls, so set `AGENT_MAX_STEPS` to at least 20 on `gitscout-api`. Changing
    `render.yaml` only takes effect on a blueprint sync; the dashboard value is what runs.

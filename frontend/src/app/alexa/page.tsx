@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { ApprovalPreview } from '@/components/alexa/approval-preview';
 import { MiniMarkdown } from '@/components/alexa/mini-markdown';
 import { StepTimeline } from '@/components/alexa/step-timeline';
+import { TelegramPanel } from '@/components/alexa/telegram-panel';
 import { useAgentSession, type Turn } from '@/hooks/use-agent-session';
 import { useAuth } from '@/hooks/use-auth';
 import { useSpeech } from '@/hooks/use-speech';
@@ -172,6 +173,8 @@ export default function AlexaPage() {
               : 'Read-only: the assistant can look things up. Changes are disabled on this deployment.'}
         </p>
       )}
+
+      <TelegramPanel enabled={!auth.loading && auth.me.signed_in && auth.me.can_write} />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Conversation */}

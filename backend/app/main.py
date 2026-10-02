@@ -18,6 +18,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("gitscout")
+# httpx logs every request URL at INFO, and a Telegram Bot API URL contains the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
@@ -26,6 +28,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("[*] Starting GitScout backend service...")
     await init_db()
     logger.info("[OK] Database initialized successfully.")
+
+    from app.telegram_link import bot as telegram_bot
+    if await telegram_bot.register_webhook():
+        logger.info("[OK] Telegram webhook registered.")
 
     if settings.ENABLE_BACKGROUND_CRAWLER:
         from app.scheduler.task_scheduler import background_scheduler

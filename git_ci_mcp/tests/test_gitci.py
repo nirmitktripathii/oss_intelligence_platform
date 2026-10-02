@@ -377,3 +377,55 @@ def test_report_rate_limit(telegram):
 
     asyncio.run(go())
     assert len(telegram.calls) == 2
+
+
+def test_report_goes_to_the_chat_the_backend_names(telegram):
+    asyncio.run(_reporter().send("Fixed slugify", "Tests pass.", chat_id="987654321"))
+    _, body = telegram.calls[0]
+    assert '"chat_id": "987654321"' in body or '"chat_id":"987654321"' in body
+    assert "42" not in body.replace("987654321", "")
+
+
+def test_a_named_chat_works_without_a_configured_fallback_chat(telegram):
+    asyncio.run(_reporter(telegram_chat_id="").send("t", "s", chat_id="555000111"))
+    assert len(telegram.calls) == 1
+
+
+@pytest.mark.parametrize("chat_id", ["@someone", "12", "1; DROP", "123456789\n987654321", "9" * 30, "abcdef"])
+def test_a_chat_id_must_be_a_telegram_chat_id(telegram, chat_id):
+    with pytest.raises(GitCiError, match="chat_id"):
+        asyncio.run(_reporter().send("t", "s", chat_id=chat_id))
+    assert telegram.calls == []
+
+
+def test_the_hourly_cap_is_per_chat(telegram):
+    rep = _reporter(report_max_per_hour=1)
+
+    async def go():
+        await rep.send("a", "s", chat_id="1111111")
+        await rep.send("a", "s", chat_id="2222222")  # a different person is not held up by the first
+        with pytest.raises(GitCiError, match="limit"):
+            await rep.send("b", "s", chat_id="1111111")
+
+    asyncio.run(go())
+    assert len(telegram.calls) == 2
+
+
+def test_a_global_cap_bounds_the_bot_across_chats(telegram):
+    rep = _reporter(report_max_per_hour=5, report_global_max_per_hour=2)
+
+    async def go():
+        await rep.send("a", "s", chat_id="1111111")
+        await rep.send("a", "s", chat_id="2222222")
+        with pytest.raises(GitCiError, match="busy"):
+            await rep.send("a", "s", chat_id="3333333")
+
+    asyncio.run(go())
+    assert len(telegram.calls) == 2
+
+
+def test_the_bot_token_never_reaches_the_logs(telegram, caplog):
+    # httpx logs each request URL at INFO, and a Telegram URL contains the token.
+    with caplog.at_level("INFO"):
+        asyncio.run(_reporter().send("t", "s"))
+    assert "SECRET-TOKEN" not in caplog.text
