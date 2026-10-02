@@ -1,5 +1,6 @@
 """Telegram Bot API Notifier with HTML formatting and inline interactive keyboard."""
 
+import html
 import logging
 from typing import Optional
 import httpx
@@ -15,6 +16,9 @@ class TelegramNotifier(BaseNotifier):
     def __init__(self, bot_token: Optional[str] = None):
         self.bot_token = bot_token or settings.TELEGRAM_BOT_TOKEN
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}" if self.bot_token else None
+
+    def is_configured(self) -> bool:
+        return bool(self.bot_token)
 
     async def send_alert(self, destination: str, payload: AlertPayload) -> bool:
         """Send formatted alert with inline buttons to Telegram chat."""
@@ -54,7 +58,7 @@ class TelegramNotifier(BaseNotifier):
             logger.info(f"[SIMULATED TELEGRAM] Test message -> Chat {destination}: {message}")
             return True
 
-        text = f"🤖 <b>GitScout Notification Test</b>\n\n{message}"
+        text = f"🤖 <b>GitScout Notification Test</b>\n\n{html.escape(message)}"
         return await self._post_message(chat_id=destination, text=text)
 
     async def _post_message(self, chat_id: str, text: str, reply_markup: Optional[dict] = None) -> bool:

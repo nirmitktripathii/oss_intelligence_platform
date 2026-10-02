@@ -90,15 +90,27 @@ The hosted agent can only change things if the Git/CI MCP server is deployed and
 
 1. **Token for the server.** Make a random access token, as for `AUTH_SECRET`:
    `python -c "import secrets; print(secrets.token_urlsafe(48))"`. Set the same value as
-   `GITCI_MCP_TOKEN` on the `gitci-mcp` service and on `gitscout-api`. Without it the server refuses
+   `GITCI_MCP_TOKEN` on the `git-ci-mcp` service and on `gitscout-api`. Without it the server refuses
    to start, and every request without it gets a 401, so nobody can reach the tools except the agent
    backend (which sits behind sign-in and the approval gate).
 2. **GitHub token for the server.** A fine-grained token limited to `gitscout-demo-sandbox` (Contents
-   and Pull requests read/write, Metadata read), short expiry. Set it as `GITHUB_TOKEN` on `gitci-mcp`.
+   and Pull requests read/write, Metadata read), short expiry. Set it as `GITHUB_TOKEN` on `git-ci-mcp`.
 3. **Allow-list.** `GITCI_ALLOWED_OWNERS` names the only accounts whose repos can be cloned or tested
    (it runs their tests on the server). Keep it to accounts you control.
 4. `gitscout-api` lists the server in `AGENT_MCP_SERVERS` with `"bearer_env": "GITCI_MCP_TOKEN"`:
    the token is read from the environment, never from that JSON.
+5. **Telegram report (optional).** The `send_report` tool messages you when a mission is done. Create a
+   bot with `@BotFather`, send it any message, and find your chat id (for example with `@userinfobot`).
+   Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` on the `git-ci-mcp` service in the Render dashboard
+   only (they are `sync: false` in `render.yaml`). The recipient is that one chat: the tool takes no
+   address, the text is a fixed template with capped fields sent as plain text, the link must be a pull
+   request in an allowed repo, and it is limited to `GITCI_REPORTS_PER_HOUR` (default 10). Like every
+   write, it asks for approval, and the approval card shows the exact message. Without the two values
+   the tool answers that reports are not set up. Test commands run without these variables, so a
+   repository's tests cannot read them.
+6. A full mission (clone, find, branch, read, test, edit, test, diff, commit, draft PR, report) is about
+   thirteen tool calls, so set `AGENT_MAX_STEPS` to at least 20 on `gitscout-api`. Changing
+   `render.yaml` only takes effect on a blueprint sync; the dashboard value is what runs.
 
 ### Who may use it (shared demo)
 

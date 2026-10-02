@@ -22,6 +22,9 @@ class WhatsAppNotifier(BaseNotifier):
         self.auth_token = auth_token or settings.TWILIO_AUTH_TOKEN
         self.from_number = from_number or settings.TWILIO_WHATSAPP_NUMBER
 
+    def is_configured(self) -> bool:
+        return bool(self.account_sid and self.auth_token and self.from_number)
+
     async def send_alert(self, destination: str, payload: AlertPayload) -> bool:
         """Send WhatsApp message to recipient phone number."""
         bounty_str = f"💰 Bounty: ${payload.bounty_usd:,.0f} USD ({payload.hourly_roi:.0f}/hr)\n" if payload.bounty_usd else ""

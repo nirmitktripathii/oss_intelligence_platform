@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, FrozenSet, Optional
 
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 from app.config import settings
 
@@ -124,4 +124,16 @@ def may_write(user: Optional[AuthUser]) -> bool:
 def require_user(user: Optional[AuthUser]) -> AuthUser:
     if user is None:
         raise HTTPException(status_code=401, detail="Sign in to do this.", headers={"WWW-Authenticate": "Bearer"})
+    return user
+
+
+async def require_writer(user: Optional[AuthUser] = Depends(optional_user)) -> AuthUser:
+    """FastAPI dependency for endpoints that send messages or expose stored contacts.
+
+    Always needs a signed-in user, even when anonymous agent writes are switched on (a development
+    convenience that must not open an email and webhook relay).
+    """
+    user = require_user(user)
+    if not may_write(user):
+        raise HTTPException(status_code=403, detail="This account is not allowed to do this.")
     return user

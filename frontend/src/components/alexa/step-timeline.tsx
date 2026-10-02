@@ -66,6 +66,9 @@ function StepOutput({ step }: { step: MissionStep }) {
       </a>
     );
   }
+  if (tool === 'send_report' && r.sent === true) {
+    return <p className="text-[11px] font-semibold text-emerald-500">Report sent to Telegram</p>;
+  }
   return null;
 }
 

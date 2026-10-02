@@ -30,6 +30,7 @@ const SUGGESTIONS = [
   'Are there any funded bounties for Rust right now?',
   'Is the GitScout backend healthy?',
   'Fix the bug in the demo sandbox and open a draft pull request when the tests pass',
+  'Fix the bug in the demo sandbox, open a draft pull request when the tests pass, then send me a Telegram report',
 ];
 
 const YES = /^\s*(yes|yeah|yep|approve|approved|go ahead|do it|ok|okay|sure|confirm)\b/i;

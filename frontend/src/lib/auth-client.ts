@@ -1,4 +1,4 @@
-import { API_BASE } from '@/lib/api-client';
+import { API_BASE } from '@/lib/api-base';
 
 /**
  * Sign-in state for the agent. The API hands the browser a short-lived signed token in the URL

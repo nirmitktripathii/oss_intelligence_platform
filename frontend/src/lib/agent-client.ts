@@ -1,4 +1,4 @@
-import { API_BASE } from '@/lib/api-client';
+import { API_BASE } from '@/lib/api-base';
 import { authHeaders } from '@/lib/auth-client';
 import type { AgentEvent, Mission } from '@/types/agent';
 

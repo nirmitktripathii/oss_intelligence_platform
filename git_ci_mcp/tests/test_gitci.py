@@ -253,3 +253,104 @@ def test_ci_status_respects_the_repo_allow_list(monkeypatch):
     result = asyncio.run(server.ci_status("torvalds/linux", "main"))
 
     assert "not an allowed owner" in result["error"]
+
+
+# ── send_report ───────────────────────────────────────────────────────────── #
+
+import httpx
+
+from gitci_mcp import report as report_mod
+from gitci_mcp.report import Reporter
+
+
+def _reporter(**overrides):
+    cfg = Settings()
+    cfg.allowed_owners = ["o"]
+    cfg.allowed_repos = ["o/r"]
+    cfg.telegram_bot_token, cfg.telegram_chat_id = "123:SECRET-TOKEN", "42"
+    for key, value in overrides.items():
+        setattr(cfg, key, value)
+    return Reporter(cfg)
+
+
+@pytest.fixture
+def telegram(monkeypatch):
+    """Replace Telegram with a recorder; the test sets .status to simulate a refusal."""
+    class Fake:
+        status, calls, boom = 200, [], False
+
+    fake = Fake()
+    fake.calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if fake.boom:
+            raise httpx.ConnectError("down", request=request)
+        fake.calls.append((str(request.url), request.read().decode()))
+        return httpx.Response(fake.status, json={"ok": fake.status == 200})
+
+    real = httpx.AsyncClient
+    monkeypatch.setattr(report_mod.httpx, "AsyncClient",
+                        lambda **kw: real(transport=httpx.MockTransport(handler), **kw))
+    return fake
+
+
+def test_send_report_is_registered():
+    assert "send_report" in {t.name for t in asyncio.run(mcp.list_tools())}
+
+
+def test_report_goes_to_the_configured_chat_as_plain_text(telegram):
+    result = asyncio.run(_reporter().send("Fixed slugify", "Tests pass.", "https://github.com/o/r/pull/3"))
+    assert result == {"sent": True, "channel": "telegram", "characters": result["characters"]}
+    url, body = telegram.calls[0]
+    assert url == "https://api.telegram.org/bot123:SECRET-TOKEN/sendMessage"
+    assert '"chat_id": "42"' in body or '"chat_id":"42"' in body
+    assert "parse_mode" not in body
+    assert "https://github.com/o/r/pull/3" in body
+
+
+def test_report_needs_telegram_to_be_set_up(telegram):
+    with pytest.raises(GitCiError, match="not set up"):
+        asyncio.run(_reporter(telegram_chat_id="").send("t", "s"))
+    assert telegram.calls == []
+
+
+@pytest.mark.parametrize("url", [
+    "https://evil.example/o/r/pull/1",
+    "https://github.com/o/r/issues/1",
+    "https://github.com/stranger/r/pull/1",   # right shape, owner not allowed
+    "https://github.com/o/other/pull/1",      # right owner, repo not allowed
+    "javascript:alert(1)",
+])
+def test_report_link_must_be_a_pull_request_in_an_allowed_repo(telegram, url):
+    with pytest.raises(GitCiError):
+        asyncio.run(_reporter().send("t", "s", url))
+    assert telegram.calls == []
+
+
+def test_report_fields_are_capped_and_cleaned():
+    text = _reporter().render("T" * 500, "line\x00one\n" + "x" * 5000)
+    assert len(text) < 1500
+    assert "\x00" not in text
+
+
+def test_telegram_failure_never_leaks_the_token(telegram):
+    telegram.status = 401
+    with pytest.raises(GitCiError) as refused:
+        asyncio.run(_reporter().send("t", "s"))
+    telegram.boom = True
+    with pytest.raises(GitCiError) as unreachable:
+        asyncio.run(_reporter().send("t", "s"))
+    assert "SECRET-TOKEN" not in str(refused.value) + str(unreachable.value)
+
+
+def test_report_rate_limit(telegram):
+    rep = _reporter(report_max_per_hour=2)
+
+    async def go():
+        await rep.send("a", "s")
+        await rep.send("b", "s")
+        with pytest.raises(GitCiError, match="limit"):
+            await rep.send("c", "s")
+
+    asyncio.run(go())
+    assert len(telegram.calls) == 2
