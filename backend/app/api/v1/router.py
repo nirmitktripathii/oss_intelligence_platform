@@ -10,6 +10,7 @@ from app.api.v1.billing import router as billing_router
 from app.api.v1.agent import router as agent_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.telegram import router as telegram_router
+from app.api.v1.email_link import router as email_router
 
 api_router = APIRouter()
 
@@ -22,3 +23,4 @@ api_router.include_router(billing_router)
 api_router.include_router(agent_router)
 api_router.include_router(auth_router)
 api_router.include_router(telegram_router)
+api_router.include_router(email_router)

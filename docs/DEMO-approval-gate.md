@@ -124,7 +124,30 @@ The hosted agent can only change things if the Git/CI MCP server is deployed and
 
    Note: a bot has one webhook. If the same bot was ever polled with `getUpdates` by another program
    (an earlier alert bot), registering the webhook stops that.
-6. A full mission (clone, find, branch, read, test, edit, test, diff, commit, draft PR, report) is about
+6. **Email (optional), demo mailbox, one address per signed-in user.** The agent reads a made-up inbox and
+   can email the signed-in user a summary. The inbox lives in the separate Email Orchestrator
+   (`github.com/nirmitktripathii/email-orchestrator`, `render.yaml` there, service `email-orchestrator-mcp`):
+   it serves 12 invented emails, one of which is a bug report pointing at the demo sandbox and one of which
+   tries to prompt-inject the assistant. It never opens a real mailbox. On that service set `MCP_HTTP_TOKEN`
+   (32+ characters), `LLM_API_KEY`, and, to allow sending, `EMAIL_SEND_ENABLED=true`, `SMTP_HOST`, `SMTP_USER`,
+   `SMTP_PASSWORD`, and add `send_email` to `EMAIL_HTTP_TOOLS`. On `gitscout-api` set `EMAIL_MCP_TOKEN` to the same
+   token and `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` (used for the confirmation code).
+   All are dashboard-only values.
+
+   How a visitor gets emails: on `/alexa`, signed in, they type an address in **Email me** and press Send code.
+   The backend mails a six-digit code to that address (10 minute life, five wrong guesses and it is spent, only
+   its hash stored). Typing the code back links the address to their GitHub login; the page shows it masked.
+   Typing someone else's address only makes the platform send them one code mail that names the account and says
+   to ignore it; nothing else is sent to an address that has not entered its code. Codes are capped at 3 per hour
+   per address and per login.
+
+   Who can be emailed: only that confirmed address. As with Telegram, the `to` argument of `send_email` is removed
+   from the schema the model sees, dropped from anything it supplies, and added by the backend from the signed-in
+   owner's link, so text in an email cannot redirect a message. A user with no confirmed address is not offered the
+   tool. Every send is its own approval card showing the subject and the exact text. The Email server also fixes
+   the shape: one plain address, plain text, 150-character subject, 4000-character body, a footer saying an AI wrote
+   it, and hourly caps per recipient (5) and overall (30).
+7. A full mission (clone, find, branch, read, test, edit, test, diff, commit, draft PR, report) is about
    thirteen tool calls, so set `AGENT_MAX_STEPS` to at least 20 on `gitscout-api`. Changing
    `render.yaml` only takes effect on a blueprint sync; the dashboard value is what runs.
 
@@ -136,8 +159,10 @@ throwaway repo: `GITCI_ALLOWED_REPOS=nirmitktripathii/gitscout-demo-sandbox` rej
 `GITHUB_TOKEN` can only write to that repo, and pull requests are always drafts. Visitors still sign in,
 and only the person who started a conversation can approve its changes.
 
-Do **not** keep `*` if you add a tool that can reach anything personal (email send, another repo).
-Switch to a comma-separated list of logins first.
+Do **not** keep `*` if you add a tool that can reach anything personal (a real mailbox, another repo).
+Switch to a comma-separated list of logins first. The demo mailbox is made up and an email can only go to an
+address its owner confirmed, so `*` stays acceptable with it, but it does let any signed-in user trigger a few
+confirmation mails and emails to their own address through your SMTP account, bounded by the caps above.
 
 Visitors leave draft PRs and branches behind. Reset with `demo/reset-demo-repo.ps1` (needs `gh`
 signed in as the repo owner). The server runs at most 3 sandboxes at once (they expire after 2 hours),

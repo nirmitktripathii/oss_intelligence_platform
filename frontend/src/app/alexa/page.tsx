@@ -21,6 +21,7 @@ import { ApprovalPreview } from '@/components/alexa/approval-preview';
 import { MiniMarkdown } from '@/components/alexa/mini-markdown';
 import { StepTimeline } from '@/components/alexa/step-timeline';
 import { TelegramPanel } from '@/components/alexa/telegram-panel';
+import { EmailPanel } from '@/components/alexa/email-panel';
 import { useAgentSession, type Turn } from '@/hooks/use-agent-session';
 import { useAuth } from '@/hooks/use-auth';
 import { useSpeech } from '@/hooks/use-speech';
@@ -32,6 +33,7 @@ const SUGGESTIONS = [
   'Is the GitScout backend healthy?',
   'Fix the bug in the demo sandbox and open a draft pull request when the tests pass',
   'Fix the bug in the demo sandbox, open a draft pull request when the tests pass, then send me a Telegram report',
+  'Check my inbox for a bug report, fix it in the demo sandbox, open a draft pull request when the tests pass, then email me a summary',
 ];
 
 const YES = /^\s*(yes|yeah|yep|approve|approved|go ahead|do it|ok|okay|sure|confirm)\b/i;
@@ -175,6 +177,7 @@ export default function AlexaPage() {
       )}
 
       <TelegramPanel enabled={!auth.loading && auth.me.signed_in && auth.me.can_write} />
+      <EmailPanel enabled={!auth.loading && auth.me.signed_in && auth.me.can_write} />
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         {/* Conversation */}

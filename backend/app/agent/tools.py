@@ -28,10 +28,13 @@ _ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 
 
 # Arguments only this server may set, by bare tool name. The model never sees them in a tool's schema
-# and anything it supplies for them is dropped: who a report goes to is the user's own linked chat,
-# not whatever the model (or text it read in an issue) names. Keyed by bare name so it holds
+# and anything it supplies for them is dropped: who a report or an email goes to is the user's own
+# linked chat or confirmed address, not whatever the model (or text it read in an issue or an email) names. Keyed by bare name so it holds
 # whatever the server is called in AGENT_MCP_SERVERS.
-SERVER_SET_ARGUMENTS: Dict[str, FrozenSet[str]] = {"send_report": frozenset({"chat_id"})}
+SERVER_SET_ARGUMENTS: Dict[str, FrozenSet[str]] = {
+    "send_report": frozenset({"chat_id"}),
+    "send_email": frozenset({"to"}),  # the address the signed-in user confirmed with a code
+}
 
 
 def bare_name(qualified_name: str) -> str:
@@ -40,6 +43,10 @@ def bare_name(qualified_name: str) -> str:
 
 def is_report_tool(qualified_name: str) -> bool:
     return bare_name(qualified_name) == "send_report"
+
+
+def is_email_tool(qualified_name: str) -> bool:
+    return bare_name(qualified_name) == "send_email"
 
 
 def without_server_set(qualified_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:

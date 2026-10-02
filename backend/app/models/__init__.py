@@ -5,6 +5,7 @@ from app.models.triage import TriageReport
 from app.models.subscription import NotificationSubscription
 from app.models.billing import BillingSubscription, CheckoutSession
 from app.models.telegram import TelegramLink, TelegramLinkCode
+from app.models.email_link import EmailLink, EmailLinkCode
 
 __all__ = [
     "Issue",
@@ -14,4 +15,6 @@ __all__ = [
     "CheckoutSession",
     "TelegramLink",
     "TelegramLinkCode",
+    "EmailLink",
+    "EmailLinkCode",
 ]

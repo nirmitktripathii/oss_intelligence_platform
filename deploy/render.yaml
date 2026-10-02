@@ -62,6 +62,19 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         value: "alerts@gitscout.dev"
+      # Email linking: the confirmation code is mailed with SMTP (for example a Gmail address with an
+      # app password; it can reach any recipient, unlike Resend's sandbox). Leave these unset and the
+      # "Email me" panel hides itself and the linking endpoints answer 503.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
@@ -88,8 +101,12 @@ services:
       # gitci needs GITCI_MCP_TOKEN here too (same value as on the git-ci-mcp service); the token is
       # read from the environment, never from this JSON. Only its read-only tools are auto-approved.
       - key: AGENT_MCP_SERVERS
-        value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}, {"name": "gitci", "url": "https://git-ci-mcp.onrender.com/mcp", "bearer_env": "GITCI_MCP_TOKEN", "auto_approve": ["sandbox_status", "list_files", "read_file", "show_diff", "ci_status"]}]'
+        value: '[{"name": "gitscout", "url": "https://gitscout-mcp.onrender.com/mcp", "auto_approve": ["search_issues", "get_issue", "analyze_issue", "analyze_issue_text", "gitscout_health"]}, {"name": "gitci", "url": "https://git-ci-mcp.onrender.com/mcp", "bearer_env": "GITCI_MCP_TOKEN", "auto_approve": ["sandbox_status", "list_files", "read_file", "show_diff", "ci_status"]}, {"name": "email", "url": "https://email-orchestrator-mcp.onrender.com/mcp", "bearer_env": "EMAIL_MCP_TOKEN", "auto_approve": ["account_status", "inbox_summary", "prioritize_inbox", "search_all", "extract_tasks", "explain_email", "detect_urgency", "suggest_actions"]}]'
       - key: GITCI_MCP_TOKEN
+        sync: false
+      # The email server (demo mailbox) needs EMAIL_MCP_TOKEN here, the same value as MCP_HTTP_TOKEN on
+      # the email-orchestrator-mcp service. send_email is not auto-approved, so every send pauses.
+      - key: EMAIL_MCP_TOKEN
         sync: false
       # Find, fix, verify and report is about thirteen tool calls; the rest is room to retry.
       - key: AGENT_MAX_STEPS

@@ -174,6 +174,11 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_USERNAME: Optional[str] = None
     TELEGRAM_LINK_TTL_SECONDS: int = 600      # how long a "Link Telegram" button press stays valid
 
+    # Email linking: the agent emails a user only at an address they confirmed with a code.
+    EMAIL_LINK_TTL_SECONDS: int = 600         # how long an emailed code works
+    EMAIL_LINK_MAX_ATTEMPTS: int = 5          # wrong guesses before a code is spent
+    EMAIL_LINK_MAX_CODES_PER_HOUR: int = 3    # codes mailed per address, and asked for per login
+
     DISCORD_WEBHOOK_URL: Optional[str] = None
 
     RESEND_API_KEY: Optional[str] = None
