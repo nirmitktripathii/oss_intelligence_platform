@@ -34,6 +34,7 @@ _ENV_NAME_RE = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 SERVER_SET_ARGUMENTS: Dict[str, FrozenSet[str]] = {
     "send_report": frozenset({"chat_id"}),
     "send_email": frozenset({"to"}),  # the address the signed-in user confirmed with a code
+    "sandbox_clone": frozenset({"owner"}),  # whose saved work comes back: the signed-in user's own
 }
 
 
@@ -47,6 +48,10 @@ def is_report_tool(qualified_name: str) -> bool:
 
 def is_email_tool(qualified_name: str) -> bool:
     return bare_name(qualified_name) == "send_email"
+
+
+def is_clone_tool(qualified_name: str) -> bool:
+    return bare_name(qualified_name) == "sandbox_clone"
 
 
 def without_server_set(qualified_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:

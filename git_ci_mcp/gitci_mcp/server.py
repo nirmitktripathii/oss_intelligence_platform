@@ -29,8 +29,8 @@ mcp = MCPServer(
     ),
 )
 
-_sandboxes = SandboxManager(settings)
 _github = GitHub(settings)
+_sandboxes = SandboxManager(settings, pr_state=_github.pr_state)
 _reporter = Reporter(settings, _sandboxes)
 
 
@@ -43,9 +43,9 @@ async def _guard(coro):
 
 
 @mcp.tool()
-async def sandbox_clone(repo_url: str, ref: Optional[str] = None) -> dict:
-    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a throwaway sandbox."""
-    return await _guard(_sandboxes.create(repo_url, ref))
+async def sandbox_clone(repo_url: str, ref: Optional[str] = None, fresh: bool = False, owner: str = "") -> dict:
+    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a sandbox. The user's unfinished work on this repo is saved after every change and put back here automatically (see "resumed" in the result: branch, commits, changed files), so continue from it. Pass fresh=true only when the user wants to start over; their saved work is kept. Each user has one sandbox per repo, so cloning again replaces the earlier one without losing its work. The owner is set by the system, not by you."""
+    return await _guard(_sandboxes.create(repo_url, ref, user=owner, fresh=fresh))
 
 
 @mcp.tool()
@@ -122,6 +122,7 @@ async def draft_pr(sandbox_id: str, title: str, body: str = "") -> dict:
         meta = _sandboxes.meta(sandbox_id)
         pushed = await _sandboxes.push_branch(sandbox_id, settings.github_token)
         pr = await _github.draft_pr(meta["owner"], meta["repo"], pushed["branch"], meta["base"], title, body)
+        await _sandboxes.record_pr(sandbox_id, pr["url"])
         return {**pr, "branch": pushed["branch"]}
     return await _guard(go())
 
@@ -134,7 +135,7 @@ async def send_report(title: str, summary: str, pr_url: str = "", chat_id: str =
 
 @mcp.tool()
 async def destroy_sandbox(sandbox_id: str) -> dict:
-    """Delete a sandbox and everything in it."""
+    """Delete your sandbox when the task is done. Unfinished work is saved first and comes back on the next sandbox_clone of the same repo."""
     return await _guard(_sandboxes.destroy(sandbox_id))
 
 

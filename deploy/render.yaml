@@ -208,6 +208,12 @@ services:
         sync: false
       - key: TELEGRAM_CHAT_ID
         sync: false
+      # Where a signed-in user's unfinished sandbox work is saved, so it survives this free instance
+      # wiping its disk on sleep or redeploy. Any Postgres works; the same database as gitscout-api is
+      # fine (a separate table, gitci_saved_work, is created on first use). Without it, saved work is
+      # lost whenever the disk is wiped. Set it in the Render dashboard only.
+      - key: GITCI_SAVE_DATABASE_URL
+        sync: false
 
   # 2. Background Scraper & AST Triage Worker
   - type: worker

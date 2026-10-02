@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict
 
 import httpx
 
 from .config import Settings, settings as default_settings
 from .sandbox import GitCiError, check_ref
+
+
+_PR_URL = re.compile(r"^https://github\.com/([A-Za-z0-9-]{1,39})/([A-Za-z0-9._-]{1,100})/pull/([0-9]{1,9})$")
 
 
 class GitHub:
@@ -45,12 +49,38 @@ class GitHub:
             overall = "failure"
         return {"repo": f"{owner}/{repo}", "ref": ref, "overall": overall, "checks": checks}
 
+    async def pr_state(self, url: str) -> str:
+        """"open", "merged", "closed", or "unknown" when GitHub cannot be asked."""
+        m = _PR_URL.match(url or "")
+        if not m:
+            return "unknown"
+        owner, repo, number = m.groups()
+        try:
+            async with httpx.AsyncClient(timeout=15, headers=self._headers(True)) as c:
+                r = await c.get(f"{self.cfg.github_api}/repos/{owner}/{repo}/pulls/{number}")
+        except httpx.HTTPError:
+            return "unknown"
+        if r.status_code != 200:
+            return "unknown"
+        pr = r.json()
+        if pr.get("merged_at"):
+            return "merged"
+        return "closed" if pr.get("state") == "closed" else "open"
+
     async def draft_pr(self, owner: str, repo: str, head: str, base: str, title: str, body: str) -> Dict[str, Any]:
         if not self.cfg.github_token:
             raise GitCiError("GITHUB_TOKEN is not set on the server, so a pull request cannot be opened.")
         async with httpx.AsyncClient(timeout=30, headers=self._headers(True)) as c:
             r = await c.post(f"{self.cfg.github_api}/repos/{owner}/{repo}/pulls",
                              json={"title": title, "head": head, "base": base, "body": body, "draft": True})
+            if r.status_code == 422:
+                # Resumed work whose branch already has an open pull request: the push updated it.
+                found = await c.get(f"{self.cfg.github_api}/repos/{owner}/{repo}/pulls",
+                                    params={"head": f"{owner}:{head}", "state": "open"})
+                if found.status_code == 200 and found.json():
+                    pr = found.json()[0]
+                    return {"created": False, "updated": True, "draft": pr.get("draft", True),
+                            "number": pr["number"], "url": pr["html_url"]}
         if r.status_code == 422:
             raise GitCiError(f"GitHub rejected the pull request: {r.json().get('message', 'validation failed')}.")
         if r.status_code in (401, 403, 404):

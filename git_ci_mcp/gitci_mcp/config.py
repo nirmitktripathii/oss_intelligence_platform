@@ -22,14 +22,30 @@ class Settings:
 
     # Every sandbox is a directory under this root; nothing outside it is ever touched.
     sandbox_root: str = os.getenv("GITCI_SANDBOX_ROOT", os.path.join(tempfile.gettempdir(), "gitci-sandboxes"))
-    # One pool shared by everyone who uses this server, and nobody can list or free another person's
-    # sandbox. So a full pool must free itself: nothing here depends on a caller cleaning up.
-    max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "5"))
-    # A sandbox nobody has used for this long is deleted the next time one is created.
+    # Each signed-in user gets one sandbox per repo (cloning again replaces it, keeping the work). The
+    # cap is a ceiling for the machine's disk, not a per-user quota: without one, a single account
+    # could clone until the disk fills and the server falls over for everyone.
+    max_sandboxes: int = int(os.getenv("GITCI_MAX_SANDBOXES", "15"))
+    # A sandbox nobody has used for this long is deleted the next time one is created. A signed-in
+    # user's work is saved first (see saved.py), so it comes back on the next sandbox_clone.
     sandbox_ttl_seconds: int = int(os.getenv("GITCI_SANDBOX_TTL_SECONDS", "1800"))
-    # When the pool is full, the sandbox that has been idle longest is deleted to make room, provided
-    # it has been idle at least this long. Anything busier is left alone and the caller is told to wait.
+    # When the pool is full, the sandbox that has been idle longest is deleted (saved first) to make
+    # room, provided it has been idle at least this long. Otherwise the caller is told to wait.
     sandbox_reclaim_seconds: int = int(os.getenv("GITCI_SANDBOX_RECLAIM_SECONDS", "600"))
+
+    # Where unfinished work is saved. Set GITCI_SAVE_DATABASE_URL (Postgres) on any host whose disk
+    # does not survive a restart, such as Render's free plan; without it work is saved under
+    # GITCI_SAVE_DIR (default: next to the sandbox root) and lost with the disk.
+    save_database_url: str = os.getenv("GITCI_SAVE_DATABASE_URL", "")
+    save_dir: str = os.getenv("GITCI_SAVE_DIR", "")
+    save_keep_days: int = int(os.getenv("GITCI_SAVE_KEEP_DAYS", "14"))
+    max_save_bytes: int = int(os.getenv("GITCI_MAX_SAVE_BYTES", "1000000"))
+
+    # Test runs are what use memory and CPU, so they are limited separately. A run waits up to
+    # test_queue_seconds for a slot, then the caller is told to try again (the agent gives up on a
+    # tool call after 90 seconds, so it cannot wait for long).
+    max_concurrent_tests: int = int(os.getenv("GITCI_MAX_CONCURRENT_TESTS", "3"))
+    test_queue_seconds: float = float(os.getenv("GITCI_TEST_QUEUE_SECONDS", "20"))
 
     # Default-deny: only repos owned by these GitHub users/orgs can be cloned, tested or pushed.
     # Point it at your own fork (the demo sandbox), never at repos you do not control, because
