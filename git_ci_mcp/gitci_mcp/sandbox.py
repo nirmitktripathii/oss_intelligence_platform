@@ -211,6 +211,17 @@ class SandboxManager:
         check_ref(name)
         repo = self._repo(sandbox_id)
         await self._git(repo, "check-ref-format", "--branch", name)
+        # Find a name clash now, not after the whole fix: a push never overwrites a branch that
+        # already exists on GitHub (an earlier run's), so it would be rejected at the very end.
+        try:
+            taken = (await self._git(repo, "ls-remote", "--heads", "origin", f"refs/heads/{name}", timeout=30)).strip()
+        except GitCiError:
+            taken = ""  # cannot reach origin to ask; the push will say if there is a real problem
+        if taken:
+            raise GitCiError(
+                f"The branch '{name}' already exists on GitHub (probably from an earlier run). "
+                f"Create the branch again with a different name, for example '{name}-2'."
+            )
         await self._git(repo, "switch", "-c", name)
         return {"branch": name}
 

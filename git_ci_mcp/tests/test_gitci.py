@@ -91,6 +91,29 @@ def test_full_local_flow(tmp_path):
     asyncio.run(flow())
 
 
+def test_create_branch_refuses_a_name_that_already_exists_on_origin(tmp_path):
+    origin = tmp_path / "origin"
+    origin.mkdir()
+    _git(origin, "init", "-b", "main")
+    (origin / "a.txt").write_text("hello\n")
+    _git(origin, "add", ".")
+    _git(origin, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "init")
+    _git(origin, "branch", "fix-slugify")  # an earlier run's branch
+
+    cfg = Settings()
+    cfg.sandbox_root = str(tmp_path / "sb")
+    cfg.allowed_owners = ["o"]
+    mgr = SandboxManager(cfg)
+
+    async def flow():
+        sid = (await mgr.create("https://github.com/o/r", source=str(origin)))["sandbox_id"]
+        with pytest.raises(GitCiError, match="already exists on GitHub.*fix-slugify-2"):
+            await mgr.create_branch(sid, "fix-slugify")
+        assert (await mgr.create_branch(sid, "fix-slugify-2"))["branch"] == "fix-slugify-2"
+
+    asyncio.run(flow())
+
+
 def test_read_only_file_tools_and_path_confinement(tmp_path):
     demo = Path(__file__).resolve().parents[2] / "demo" / "sandbox-repo"
     origin = tmp_path / "origin"
