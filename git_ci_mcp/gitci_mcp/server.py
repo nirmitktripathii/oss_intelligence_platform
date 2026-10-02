@@ -15,20 +15,23 @@ from mcp.server.mcpserver import MCPServer
 from .auth import BearerAuthMiddleware, require_token
 from .config import settings
 from .github import GitHub
+from .report import Reporter
 from .sandbox import GitCiError, SandboxManager
 
 mcp = MCPServer(
     "GitCI",
     instructions=(
         "Turn a triaged issue into a reviewed change. Flow: sandbox_clone, list_files/read_file, create_branch, edit_file (exact old/new text, preferred) or apply_patch (a unified diff), "
-        "run_tests, show_diff, commit_changes, draft_pr, then ci_status. Only allow-listed repos work. "
-        "Pull requests are always drafts and the base branch is never pushed. Ask the user before every "
-        "step that writes (clone, patch, tests, commit, PR)."
+        "run_tests, show_diff, commit_changes, draft_pr, then ci_status and send_report. Only allow-listed repos work. "
+        "Pull requests are always drafts and the base branch is never pushed. send_report messages the "
+        "owner on Telegram (fixed recipient). Ask the user before every step that writes (clone, patch, "
+        "tests, commit, PR, report)."
     ),
 )
 
 _sandboxes = SandboxManager(settings)
 _github = GitHub(settings)
+_reporter = Reporter(settings, _sandboxes)
 
 
 async def _guard(coro):
@@ -121,6 +124,12 @@ async def draft_pr(sandbox_id: str, title: str, body: str = "") -> dict:
         pr = await _github.draft_pr(meta["owner"], meta["repo"], pushed["branch"], meta["base"], title, body)
         return {**pr, "branch": pushed["branch"]}
     return await _guard(go())
+
+
+@mcp.tool()
+async def send_report(title: str, summary: str, pr_url: str = "") -> dict:
+    """Send the owner a Telegram message about what this mission did. The recipient is fixed on the server. Give a short title (what was fixed), a summary of what changed and whether the tests passed, and pr_url, the draft pull request link from draft_pr. Send it last, after the pull request exists."""
+    return await _guard(_reporter.send(title, summary, pr_url))
 
 
 @mcp.tool()

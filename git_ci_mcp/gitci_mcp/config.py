@@ -46,6 +46,12 @@ class Settings:
     github_token: str = os.getenv("GITHUB_TOKEN", "")
     github_api: str = os.getenv("GITHUB_API_BASE", "https://api.github.com")
 
+    # Where send_report delivers: one Telegram chat, fixed here and never chosen by a caller. Both
+    # unset = reporting is off. Not visible to test commands (see _SAFE_ENV in sandbox.py).
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
+    report_max_per_hour: int = int(os.getenv("GITCI_REPORTS_PER_HOUR", "10"))
+
     # Commit identity. Unset = use the machine's own git config (your identity).
     author_name: str = os.getenv("GITCI_AUTHOR_NAME", "")
     author_email: str = os.getenv("GITCI_AUTHOR_EMAIL", "")
