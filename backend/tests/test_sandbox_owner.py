@@ -95,7 +95,8 @@ async def test_the_model_cannot_see_or_set_the_owner(llm):
     assert set(catalog["gitci.delete_saved_work"].input_schema["properties"]) == {"repo_url", "branch"}
 
     planner = MissionPlanner(ToolRegistry([source]), store=MissionStore(), max_steps=4, workspace_owner="alice")
-    llm.script += [_clone(owner="bob"), _final()]
+    # Two finals: with the sandbox still open, the first one is asked once more.
+    llm.script += [_clone(owner="bob"), _final(), _final()]
     mission = await planner.start("fix the bug")
     assert mission.steps[0].arguments == {"repo_url": REPO}  # the approval card shows nothing of "bob"
 
@@ -185,7 +186,7 @@ async def test_the_api_clones_as_the_signed_in_login(client: httpx.AsyncClient, 
     created = (await client.post("/api/v1/agent/missions", json={"utterance": "fix it"}, headers=_bearer("Alice"))).json()
     assert created["status"] == "awaiting_approval"
 
-    llm.script += [_final()]
+    llm.script += [_final(), _final()]  # the sandbox is still open, so the first final is asked again
     headers = {**_bearer("Alice"), "X-Session-Token": created["session_token"]}
     approved = await client.post(f"/api/v1/agent/missions/{created['id']}/approval", json={"approved": True}, headers=headers)
     assert approved.json()["status"] == "completed"

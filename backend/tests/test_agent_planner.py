@@ -8,7 +8,7 @@ import httpx
 import pytest
 
 from app.agent import tools as agent_tools
-from app.agent.planner import MissionPlanner, MissionStateError
+from app.agent.planner import PLANNER_SYSTEM_PROMPT, MissionPlanner, MissionStateError
 from app.agent.store import MissionStore
 from app.agent.tools import AgentConfigError, McpToolSource, ToolError, ToolRegistry, ToolSpec
 from app.api.v1 import agent as agent_api
@@ -706,3 +706,112 @@ def test_bearer_env_is_validated(monkeypatch):
         monkeypatch.setattr(app_settings, "AGENT_MCP_SERVERS", base % bad)
         with pytest.raises(AgentConfigError):
             agent_tools.configured_registry()
+
+
+# -- Finishing early ------------------------------------------------------- #
+
+
+class FakeGitSource:
+    """Clone, test and destroy, enough to see whether a mission stops while its sandbox is open."""
+
+    name = "gitci"
+
+    def __init__(self):
+        self.calls: List[tuple] = []
+
+    async def list_tools(self) -> List[ToolSpec]:
+        def spec(name: str, approval: bool, required: List[str]) -> ToolSpec:
+            props = {key: {"type": "string"} for key in required}
+            return ToolSpec(name=f"gitci.{name}", description=name, requires_approval=approval,
+                            input_schema={"type": "object", "properties": props, "required": required})
+        return [spec("sandbox_clone", False, ["repo_url"]), spec("run_tests", False, ["sandbox_id"]),
+                spec("destroy_sandbox", True, ["sandbox_id"])]
+
+    async def call_tool(self, tool: str, arguments: Dict[str, Any]) -> Any:
+        self.calls.append((tool, arguments))
+        if tool == "sandbox_clone":
+            return {"sandbox_id": "abc123", "repo": "acme/widgets", "branch": "main"}
+        if tool == "run_tests":
+            return {"passed": True, "output": "3 passed"}
+        return {"destroyed": arguments["sandbox_id"]}
+
+
+@pytest.fixture
+def git_planner():
+    source = FakeGitSource()
+    return MissionPlanner(ToolRegistry([source]), store=MissionStore(), max_steps=5), source
+
+
+@pytest.mark.asyncio
+async def test_a_final_that_only_says_what_comes_next_is_sent_back_once(git_planner, llm):
+    # Seen live: after reading the tests the model answered "final" with "Let's inspect the tests more
+    # closely", and the mission ended half done. With its sandbox still open, it is asked once more.
+    planner, source = git_planner
+    llm.script += [
+        _tool("gitci.sandbox_clone", repo_url="https://github.com/acme/widgets"),
+        _final("I checked the files.", "Let's inspect the tests more closely."),
+        _tool("gitci.run_tests", sandbox_id="abc123"),
+        _final("The tests pass."),
+    ]
+
+    mission = await planner.start("fix the bug in the demo sandbox")
+
+    assert mission.status == MissionStatus.COMPLETED
+    assert mission.speech == "The tests pass."
+    assert [call[0] for call in source.calls] == ["sandbox_clone", "run_tests"]
+    assert "sandbox abc123 is still open" in llm.prompts[2]
+    assert '"final" ends the mission' in llm.prompts[2]
+
+
+@pytest.mark.asyncio
+async def test_a_second_final_stands(git_planner, llm):
+    planner, source = git_planner
+    llm.script += [
+        _tool("gitci.sandbox_clone", repo_url="https://github.com/acme/widgets"),
+        _final("Cloned it, as you asked."),
+        _final("Cloned it, as you asked. The sandbox stays open for your next request."),
+    ]
+
+    mission = await planner.start("just clone the demo sandbox")
+
+    assert mission.status == MissionStatus.COMPLETED
+    assert mission.speech.endswith("open for your next request.")
+    assert len(llm.prompts) == 3  # one question back, not a loop
+
+
+@pytest.mark.asyncio
+async def test_a_final_after_the_sandbox_is_destroyed_or_without_one_is_not_questioned(git_planner, llm):
+    planner, source = git_planner
+    llm.script += [
+        _tool("gitci.sandbox_clone", repo_url="https://github.com/acme/widgets"),
+        _tool("gitci.destroy_sandbox", sandbox_id="abc123"),
+        _final("All done, and the sandbox is freed."),
+        _final("Nothing to clone for that."),
+    ]
+
+    mission = await planner.start("fix the bug in the demo sandbox")
+    assert mission.status == MissionStatus.AWAITING_APPROVAL
+    mission = await planner.resolve_approval(mission.id, approved=True)
+    assert mission.status == MissionStatus.COMPLETED
+    assert mission.speech == "All done, and the sandbox is freed."
+
+    mission = await planner.start("hello")
+    assert mission.speech == "Nothing to clone for that."
+    assert len(llm.prompts) == 4
+
+
+@pytest.mark.asyncio
+async def test_no_question_back_when_no_tool_calls_remain(llm):
+    source = FakeGitSource()
+    planner = MissionPlanner(ToolRegistry([source]), store=MissionStore(), max_steps=1)
+    llm.script += [_tool("gitci.sandbox_clone", repo_url="https://github.com/acme/widgets"), _final("Out of steps.")]
+
+    mission = await planner.start("fix the bug in the demo sandbox")
+
+    assert mission.status == MissionStatus.COMPLETED
+    assert mission.speech == "Out of steps."
+
+
+def test_the_prompt_says_final_ends_the_mission_and_how_to_resume_a_passing_branch():
+    assert 'Never use "final" to say what you will do next' in PLANNER_SYSTEM_PROMPT
+    assert "If the tests already pass on a resumed branch, the fix is already there" in PLANNER_SYSTEM_PROMPT
