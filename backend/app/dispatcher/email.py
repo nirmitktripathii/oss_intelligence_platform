@@ -9,6 +9,7 @@ import aiosmtplib
 import httpx
 from app.config import settings
 from app.dispatcher.base import AlertPayload, BaseNotifier
+from app.smtp import tls_options
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +96,7 @@ class EmailNotifier(BaseNotifier):
                 port=settings.SMTP_PORT,
                 username=settings.SMTP_USERNAME,
                 password=settings.SMTP_PASSWORD,
-                use_tls=(settings.SMTP_PORT == 465),
-                start_tls=(settings.SMTP_PORT == 587),
+                **tls_options(settings.SMTP_PORT),
                 timeout=10.0,
             )
             return True

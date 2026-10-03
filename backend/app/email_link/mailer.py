@@ -3,8 +3,9 @@ Sends the confirmation code. This is the only email the platform itself sends to
 typed, so unlike the alert notifier it never "simulates" success: if nothing is set up to send, it
 says so and the endpoint answers 503, rather than telling the user a mail is on its way.
 
-SMTP is used when configured (a Gmail app password reaches any recipient). Resend is the fallback,
-but without a verified domain Resend only delivers to its account owner, so it is a poor first choice.
+SMTP is used when configured. On Render's free tier ports 25, 465 and 587 are blocked, so there the
+provider's alternate port is needed (see ``app/smtp.py``). Resend's HTTPS API is the fallback; it is
+never blocked, but without a verified domain Resend only delivers to its account owner.
 """
 
 import logging
@@ -14,6 +15,7 @@ import aiosmtplib
 import httpx
 
 from app.config import settings
+from app.smtp import failure_hint, tls_options
 
 logger = logging.getLogger("gitscout.email_link")
 
@@ -44,11 +46,14 @@ async def send_code(address: str, login: str, code: str, minutes: int) -> bool:
             await aiosmtplib.send(
                 message, hostname=settings.SMTP_HOST, port=settings.SMTP_PORT,
                 username=settings.SMTP_USERNAME, password=settings.SMTP_PASSWORD,
-                use_tls=(settings.SMTP_PORT == 465), start_tls=(settings.SMTP_PORT != 465), timeout=15.0,
+                timeout=15.0, **tls_options(settings.SMTP_PORT),
             )
             return True
         except Exception as exc:
-            logger.warning("[EMAIL-LINK] SMTP send failed: %s", type(exc).__name__)
+            logger.warning(
+                "[EMAIL-LINK] SMTP send to %s:%s failed: %s%s", settings.SMTP_HOST, settings.SMTP_PORT,
+                type(exc).__name__, failure_hint(settings.SMTP_PORT, exc),
+            )
     if settings.RESEND_API_KEY:
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:

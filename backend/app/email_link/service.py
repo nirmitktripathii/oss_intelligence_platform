@@ -77,6 +77,12 @@ async def create_code(db: AsyncSession, login: str, address: str) -> Tuple[str, 
     return code, ttl
 
 
+async def discard_code(db: AsyncSession, login: str, address: str, code: str) -> None:
+    """Forget a code whose mail could not be sent, so a failure on our side does not use up the caps."""
+    await db.execute(delete(EmailLinkCode).where(EmailLinkCode.code_hash == _hash(login, address, code)))
+    await db.commit()
+
+
 async def confirm_code(db: AsyncSession, login: str, code: str) -> Optional[str]:
     """
     Link the address the newest live code was sent to, and return it; ``None`` if the code is wrong,
