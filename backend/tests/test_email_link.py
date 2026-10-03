@@ -1,8 +1,10 @@
 """Per-user email linking: the confirm-by-code flow, its limits, and aiming send_email at the owner's address."""
 
 import json
+import logging
 from typing import Any, Dict, List
 
+import aiosmtplib
 import httpx
 import pytest
 from sqlalchemy import select
@@ -18,6 +20,7 @@ from app.models.email_link import EmailLink, EmailLinkCode
 from app.schemas.agent import MissionStatus, StepStatus
 from app.security import auth
 from app.security.rate_limiter import limiter
+from app.smtp import tls_options
 from app.triage.llm_engine import LLMTriageEngine
 
 ALICE_MAIL, BOB_MAIL = "alice@example.com", "bob@example.org"
@@ -210,6 +213,56 @@ async def test_a_mail_that_cannot_be_sent_is_reported(client: httpx.AsyncClient,
 
     monkeypatch.setattr(mailer, "send_code", fail)
     assert (await _ask(client, "alice", ALICE_MAIL)).status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_a_mail_that_cannot_be_sent_does_not_use_up_the_caps(client: httpx.AsyncClient, monkeypatch, db_session):
+    # A blocked mail server must not lock the user out for an hour: each failed try is forgotten.
+    async def fail(*args, **kwargs) -> bool:
+        return False
+
+    async def ok(*args, **kwargs) -> bool:
+        return True
+
+    monkeypatch.setattr(mailer, "send_code", fail)
+    for _ in range(4):
+        assert (await _ask(client, "alice", ALICE_MAIL)).status_code == 503
+        limiter.reset()
+    assert (await db_session.execute(select(EmailLinkCode))).first() is None
+    monkeypatch.setattr(mailer, "send_code", ok)
+    assert (await _ask(client, "alice", ALICE_MAIL)).status_code == 200
+
+
+@pytest.mark.parametrize("port, implicit", [(465, True), (2465, True), (587, False), (2525, False), (2587, False)])
+def test_the_tls_mode_follows_the_port(port, implicit):
+    # Only 465 and 2465 start encrypted; every other port must upgrade before the password is sent.
+    assert tls_options(port) == {"use_tls": implicit, "start_tls": not implicit}
+
+
+@pytest.mark.asyncio
+async def test_the_confirmation_mail_uses_an_alternate_port_with_starttls(monkeypatch):
+    seen: Dict[str, Any] = {}
+
+    async def fake_send(message, **kwargs):
+        seen.update(kwargs)
+
+    monkeypatch.setattr(settings, "SMTP_PORT", 2525)
+    monkeypatch.setattr(mailer.aiosmtplib, "send", fake_send)
+    assert await mailer.send_code(ALICE_MAIL, "alice", "123456", 10) is True
+    assert seen["port"] == 2525 and seen["start_tls"] is True and seen["use_tls"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_port_is_named_in_the_log(monkeypatch, caplog):
+    async def dropped(message, **kwargs):
+        raise aiosmtplib.SMTPConnectTimeoutError("Timed out connecting to smtp.example.com on port 587")
+
+    monkeypatch.setattr(settings, "SMTP_PORT", 587)
+    monkeypatch.setattr(mailer.aiosmtplib, "send", dropped)
+    with caplog.at_level(logging.WARNING, logger="gitscout.email_link"):
+        assert await mailer.send_code(ALICE_MAIL, "alice", "123456", 10) is False
+    assert "smtp.example.com:587" in caplog.text
+    assert "blocked on Render's free tier" in caplog.text
 
 
 @pytest.mark.asyncio

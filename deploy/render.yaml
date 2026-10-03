@@ -62,13 +62,15 @@ services:
         sync: false
       - key: RESEND_FROM_EMAIL
         value: "alerts@gitscout.dev"
-      # Email linking: the confirmation code is mailed with SMTP (for example a Gmail address with an
-      # app password; it can reach any recipient, unlike Resend's sandbox). Leave these unset and the
-      # "Email me" panel hides itself and the linking endpoints answer 503.
+      # Email linking: the confirmation code is mailed with SMTP. Render's free tier blocks outbound
+      # ports 25, 465 and 587, so on a free instance use the provider's alternate port: 2525 (Brevo,
+      # Mailjet) or 2587 (Resend, Amazon SES). Gmail has none, so it only works on a paid instance.
+      # SMTP_PORT is a dashboard value so that a blueprint sync cannot put it back to a blocked port.
+      # Leave these unset and the "Email me" panel hides itself and the linking endpoints answer 503.
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
-        value: "587"
+        sync: false
       - key: SMTP_USERNAME
         sync: false
       - key: SMTP_PASSWORD

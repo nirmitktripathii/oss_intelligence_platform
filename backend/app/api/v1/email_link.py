@@ -77,7 +77,11 @@ async def start_link(
     except service.TooManyCodes:
         raise HTTPException(status_code=429, detail="Too many codes asked for this hour. Try again later.")
     if not await mailer.send_code(address, user.login, code, ttl // 60):
-        raise HTTPException(status_code=503, detail="Could not send the email. Try again in a moment.")
+        # The failure is ours, not the user's: forget the code so the try does not count toward the caps.
+        await service.discard_code(db, user.login, address, code)
+        raise HTTPException(
+            status_code=503, detail="Could not send the email. The problem is on our side, not with your address.",
+        )
     return LinkStarted(expires_in=ttl)
 
 
