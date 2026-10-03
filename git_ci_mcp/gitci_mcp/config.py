@@ -38,6 +38,15 @@ class Settings:
     # A sandbox whose work cannot be saved (database down, or its owner out of space) is kept instead
     # of deleted, but only until it has been idle this long, so it cannot hold a slot forever.
     save_grace_seconds: int = int(os.getenv("GITCI_SAVE_GRACE_SECONDS", "86400"))
+    # Autosave: this often, every signed-in user's open sandbox is saved if it changed since the last
+    # save, so work made between tool calls (a file written by a test run, an edit) is not lost when the
+    # server restarts. 0 turns it off. Saving is not use: it never resets a sandbox's idle time.
+    autosave_seconds: float = float(os.getenv("GITCI_AUTOSAVE_SECONDS", "60"))
+    # One session per branch. A session that resumes a branch takes over the sandbox holding it (that
+    # one is saved and closed, and tells its caller so), unless that sandbox was used in the last
+    # this many seconds: another session is working on it right now, so the new one is refused and
+    # asked to wait or have the other one closed.
+    takeover_idle_seconds: int = int(os.getenv("GITCI_TAKEOVER_IDLE_SECONDS", "30"))
 
     # Where unfinished work is saved. Set GITCI_SAVE_DATABASE_URL (Postgres) on any host whose disk
     # does not survive a restart, such as Render's free plan; without it work is saved under

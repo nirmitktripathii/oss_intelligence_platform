@@ -45,7 +45,7 @@ async def _guard(coro):
 
 @mcp.tool()
 async def sandbox_clone(repo_url: str, ref: Optional[str] = None, branch: Optional[str] = None, owner: str = "") -> dict:
-    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a sandbox. The user's unfinished work is saved after every change, one record per branch. Without branch, the sandbox starts clean and "saved_work" in the result lists the user's saved branches of this repo. To continue one of them, call sandbox_clone with branch set to its name: the work comes back on that branch (see "resumed": commits, changed files, pull request), so continue from there instead of redoing it. The owner is set by the system, not by you."""
+    """Clone an allow-listed GitHub repo (https://github.com/owner/repo) into a sandbox. The user's unfinished work is saved after every change, one record per branch. Without branch, the sandbox starts clean and "saved_work" in the result lists the user's saved branches of this repo. To continue one of them, call sandbox_clone with branch set to its name: the work comes back on that branch (see "resumed": commits, changed files, pull request), so continue from there instead of redoing it. A branch is open in one session at a time: if the user's other session (another tab) used it moments ago, the call is refused and you must stop and tell the user, not retry; if it sat idle, this call takes the branch over and the older session is closed. The owner is set by the system, not by you."""
     return await _guard(_sandboxes.create(repo_url, ref, user=owner, branch=branch))
 
 

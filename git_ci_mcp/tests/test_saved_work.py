@@ -50,6 +50,8 @@ class Env:
         self.cfg.max_sandboxes, self.cfg.sandbox_ttl_seconds, self.cfg.sandbox_reclaim_seconds = 15, 1800, 600
         self.cfg.max_sandboxes_per_user, self.cfg.save_grace_seconds = 5, 86400
         self.cfg.max_saved_branches, self.cfg.max_saved_bytes_per_user = 15, 100_000_000
+        # Off unless a test is about them: a takeover is instant, and the periodic save never fires.
+        self.cfg.takeover_idle_seconds, self.cfg.autosave_seconds = 0, 0
         for key, value in cfg_overrides.items():
             setattr(self.cfg, key, value)
         self.mgr = SandboxManager(self.cfg, store=store, pr_state=pr_state)

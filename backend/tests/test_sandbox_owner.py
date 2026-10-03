@@ -166,6 +166,16 @@ def test_the_rules_say_how_to_continue_and_free_saved_work():
     assert "call sandbox_clone again" in PLANNER_SYSTEM_PROMPT and "fresh" not in PLANNER_SYSTEM_PROMPT
 
 
+def test_the_rules_say_to_stop_not_re_clone_when_another_session_has_the_branch():
+    """Two tabs on one branch: re-cloning to recover closes the other tab's sandbox, whose assistant
+    re-clones in turn. The rule that breaks the loop is to stop and tell the user."""
+    rules = PLANNER_SYSTEM_PROMPT
+    assert "took the sandbox over" in rules and "open in another session" in rules
+    assert "STOP: do not call sandbox_clone" in rules and "tell the user plainly" in rules
+    # ...and it is a different case from a sandbox that merely expired, which is still re-cloned.
+    assert rules.index("expired or was reclaimed") < rules.index("STOP: do not call sandbox_clone")
+
+
 @pytest.mark.asyncio
 async def test_the_api_clones_as_the_signed_in_login(client: httpx.AsyncClient, llm, monkeypatch):
     source = CloneSource()
