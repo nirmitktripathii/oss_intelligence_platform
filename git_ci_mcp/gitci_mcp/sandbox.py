@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import os
@@ -110,6 +111,25 @@ def remove_tree(path: Path) -> None:
         shutil.rmtree(path, onerror=retry)
 
 
+# What a session is told when its sandbox was closed by something other than idle cleanup. The words
+# matter: the model must stop, not clone the branch again (that would close the other session, which
+# would then clone it back, and the two would keep undoing each other).
+_CLOSED = {
+    "taken_over": (
+        "This sandbox was closed because a newer session on branch '{branch}' took over (usually the same "
+        "repository open in another tab). Its work was saved and carried on in the newer session. Do not call "
+        "sandbox_clone for this branch again: that would take the branch back and close the other session. "
+        "Stop here and tell the user to continue in the newer session, or to close it first if they want to "
+        "continue here."
+    ),
+    "deleted": (
+        "This sandbox was closed because the saved work on branch '{branch}' was deleted at the user's "
+        "request. Do not clone that branch again; tell the user."
+    ),
+}
+_CLOSED_KEEP_SECONDS = 86400
+
+
 def _when(ts: float) -> str:
     return time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ts))
 
@@ -132,6 +152,13 @@ class SandboxManager:
         # merged or closed is not put back.
         self.pr_state = pr_state
         self._tests = asyncio.Semaphore(max(1, cfg.max_concurrent_tests))
+        # Saving a sandbox is one at a time, so a periodic save, an after-change save and a close never
+        # interleave. The rest is bookkeeping for the periodic save (see autosave_all).
+        self._locks: Dict[str, asyncio.Lock] = {}
+        self._digests: Dict[str, str] = {}   # content last put in the store, per sandbox
+        self._seen: Dict[str, str] = {}      # what the sandbox looked like when it was last found saved
+        self._warned: Dict[str, str] = {}    # last problem logged per sandbox, so one is not logged every minute
+        self._autosaver: Optional[asyncio.Task] = None
 
     # ---------------------------------------------------------------- plumbing
     def _dir(self, sandbox_id: str) -> Path:
@@ -140,9 +167,13 @@ class SandboxManager:
                 "That is not a sandbox id. Use the sandbox_id that sandbox_clone returned (12 letters and digits); "
                 "do not guess one."
             )
+        self._ensure_autosaver()
         d = self.root / sandbox_id
         meta = d / "meta.json"
         if not meta.is_file():
+            closed = self._burial(sandbox_id)
+            if closed:
+                raise GitCiError(self._closed_note(closed))
             raise GitCiError(
                 "Unknown sandbox id. It may have expired or been reclaimed after sitting idle. "
                 "Run sandbox_clone again to get a new one: its result lists your saved work, and passing "
@@ -156,6 +187,46 @@ class SandboxManager:
 
     def _meta(self, sandbox_id: str) -> Dict[str, Any]:
         return json.loads((self._dir(sandbox_id) / "meta.json").read_text(encoding="utf-8"))
+
+    # A sandbox closed by a takeover (or a delete) leaves a small note, so a call that still uses its id
+    # is told why instead of "unknown sandbox", which invites cloning it again.
+    def _bury(self, sandbox_id: str, reason: str, branch: str) -> None:
+        try:
+            notes = self.root / ".closed"
+            notes.mkdir(parents=True, exist_ok=True)
+            (notes / f"{sandbox_id}.json").write_text(
+                json.dumps({"reason": reason, "branch": branch, "at": time.time()}), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _burial(self, sandbox_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            return json.loads((self.root / ".closed" / f"{sandbox_id}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    @staticmethod
+    def _closed_note(closed: Dict[str, Any]) -> str:
+        return _CLOSED.get(closed.get("reason", ""), _CLOSED["taken_over"]).format(branch=closed.get("branch", "?"))
+
+    def _prune_burials(self) -> None:
+        notes = self.root / ".closed"
+        if not notes.is_dir():
+            return
+        cutoff = time.time() - _CLOSED_KEEP_SECONDS
+        for note in notes.iterdir():
+            try:
+                if note.stat().st_mtime < cutoff:
+                    note.unlink()
+            except OSError:
+                pass
+
+    def _lock(self, name: str) -> asyncio.Lock:
+        return self._locks.setdefault(name, asyncio.Lock())
+
+    def _forget(self, name: str) -> None:
+        for book in (self._locks, self._digests, self._seen, self._warned):
+            book.pop(name, None)
 
     def _repo(self, sandbox_id: str) -> Path:
         return self._dir(sandbox_id) / "repo"
@@ -220,6 +291,7 @@ class SandboxManager:
         Nothing is deleted before its owner's work is saved. A sandbox whose work cannot be saved is
         kept, but only until it has been idle for the grace period. Last use is the mtime of meta.json."""
         self.root.mkdir(parents=True, exist_ok=True)
+        self._prune_burials()
         live = []
         for idle, d, _meta in self._live():
             if idle > self.cfg.sandbox_ttl_seconds:
@@ -248,45 +320,77 @@ class SandboxManager:
     # One saved record per user, repo and branch. A sandbox writes only the record of the branch it is
     # on, and only a record it created or restored ("owns"), so work on one issue never overwrites
     # work on another, even from a clean clone of the same repo in another conversation.
-    async def _delete_saving(self, d: Path) -> bool:
-        """Save the owner's work, then delete the sandbox. False (and nothing deleted) if saving failed."""
+    async def _delete_saving(self, d: Path, closed: Optional[Tuple[str, str]] = None) -> bool:
+        """Save the owner's work, then delete the sandbox. False (and nothing deleted) if saving failed.
+        ``closed`` (reason, branch) leaves a note that tells a caller still using its id why it is gone."""
         try:
-            await self._save(d)
+            async with self._lock(d.name):
+                await self._save_unlocked(d)
+                if closed:
+                    self._bury(d.name, *closed)
+                await asyncio.to_thread(remove_tree, d)
         except Exception as exc:
             logger.warning("[GITCI] keeping sandbox %s: could not save its work (%s)", d.name, type(exc).__name__)
             return False
-        await asyncio.to_thread(remove_tree, d)
+        self._forget(d.name)
         return True
 
     async def _save(self, d: Path) -> bool:
         """Save a signed-in owner's work in sandbox directory ``d``. Returns False when there is
         nothing to save (no owner, or no change from the base). Raises if saving fails."""
-        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        async with self._lock(d.name):
+            return await self._save_unlocked(d)
+
+    async def _save_unlocked(self, d: Path, only_if_changed: bool = False) -> bool:
+        """_save, for a caller that holds the sandbox's lock. ``only_if_changed`` skips the store when
+        the content is what was last saved."""
+        try:
+            meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise GitCiError("This sandbox was already closed.")
         owner = meta.get("user")
         if not owner:
             return False
         repo = d / "repo"
         base_sha = meta["base_sha"]
         branch = (await self._git(repo, "rev-parse", "--abbrev-ref", "HEAD")).strip()
+        # Pinned: a commit made while this runs must not leave the commits and the diff out of step.
+        head = (await self._git(repo, "rev-parse", "HEAD")).strip()
         # Commits already pushed are on GitHub; save only what came after, so a resumed branch keeps
         # the same commits and pushing it again is a fast-forward.
         pushed_sha = meta.get("pushed", {}).get(branch, "")
         patch_base = pushed_sha or base_sha
-        commits = int((await self._git(repo, "rev-list", "--count", f"{base_sha}..HEAD")).strip() or 0)
-        unpushed = int((await self._git(repo, "rev-list", "--count", f"{patch_base}..HEAD")).strip() or 0)
+        commits = int((await self._git(repo, "rev-list", "--count", f"{base_sha}..{head}")).strip() or 0)
+        unpushed = int((await self._git(repo, "rev-list", "--count", f"{patch_base}..{head}")).strip() or 0)
         commits_patch = ""
         if unpushed:
-            commits_patch = await self._git(repo, "format-patch", "--stdout", "--binary", f"{patch_base}..HEAD")
-        await self._git(repo, "add", "-N", "--", ".", *_NOT_WORK)
-        uncommitted = await self._git(repo, "diff", "HEAD", "--binary", "--", ".", *_NOT_WORK)
+            commits_patch = await self._git(repo, "format-patch", "--stdout", "--binary", f"{patch_base}..{head}")
+        # New files are found through a scratch index, so this never touches the repo's own index (a
+        # commit running at the same moment would otherwise fail on its lock).
+        scratch_index = d / "save.index"
+        scratch = {"GIT_INDEX_FILE": str(scratch_index), "GIT_OPTIONAL_LOCKS": "0"}
+        try:
+            await self._git(repo, "read-tree", head, extra_env=scratch)
+            await self._git(repo, "add", "-N", "--", ".", *_NOT_WORK, extra_env=scratch)
+            uncommitted = await self._git(repo, "diff", head, "--binary", "--", ".", *_NOT_WORK, extra_env=scratch)
+            changed = (await self._git(repo, "diff", "--name-only", base_sha, "--", ".", *_NOT_WORK,
+                                       extra_env=scratch)).split()
+        finally:
+            scratch_index.unlink(missing_ok=True)
+        if (await self._git(repo, "rev-parse", "HEAD")).strip() != head:
+            raise GitCiError("The sandbox changed while it was being saved; it is saved again at the next change.")
         if branch == meta["base"] and not commits and not uncommitted.strip():
             return False
         if len(commits_patch) + len(uncommitted) > self.cfg.max_save_bytes:
             raise SaveRefused(f"The work on '{branch}' is larger than {self.cfg.max_save_bytes} bytes, so it "
                               "cannot be saved and would be lost if the server restarts.")
-        changed = (await self._git(repo, "diff", "--name-only", base_sha, "--", ".", *_NOT_WORK)).split()
-        last = (await self._git(repo, "log", "-1", "--format=%s")).strip() if commits else ""
+        last = (await self._git(repo, "log", "-1", "--format=%s", head)).strip() if commits else ""
         key = meta["key"]
+        digest = hashlib.sha256(json.dumps(
+            [branch, commits_patch, uncommitted, pushed_sha, meta.get("parents", {}).get(branch, ""),
+             meta.get("prs", {}).get(branch, "")]).encode("utf-8", "replace")).hexdigest()
+        if only_if_changed and self._digests.get(d.name) == digest:
+            return False
         data = {
             "base": meta["base"], "base_sha": base_sha, "commits": commits, "last_commit": last,
             "parent": meta.get("parents", {}).get(branch, ""), "pushed_sha": pushed_sha,
@@ -307,10 +411,88 @@ class SandboxManager:
             )
         await self._check_space(owner, key, branch, data)
         await self.store.put(owner, key, branch, data)
+        self._digests[d.name] = digest
         if branch not in owns:
             meta["owns"] = owns + [branch]
             (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
         return True
+
+    # ---------------------------------------------------------------- periodic autosave
+    # Saving after each tool call misses everything that happens between calls (a file a test run
+    # wrote, an edit made by hand), and a Render free instance can restart at any time. So every
+    # autosave_seconds every signed-in user's sandbox is looked at, and saved if it changed.
+    def _ensure_autosaver(self) -> None:
+        """Start the periodic save on the running event loop (once)."""
+        if self.cfg.autosave_seconds <= 0:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        task = self._autosaver
+        if task is not None and not task.done() and task.get_loop() is loop:
+            return
+        self._autosaver = loop.create_task(self._autosave_loop())
+
+    async def _autosave_loop(self) -> None:
+        while True:
+            await asyncio.sleep(self.cfg.autosave_seconds)
+            try:
+                await self.autosave_all()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("[GITCI] periodic save failed (%s)", type(exc).__name__)
+
+    async def _fingerprint(self, repo: Path) -> str:
+        """A cheap stand-in for "has anything changed": HEAD plus each changed file's size and mtime.
+        Reads only (no index lock), so it cannot collide with a commit in progress."""
+        head = (await self._git(repo, "rev-parse", "HEAD")).strip()
+        status = await self._git(repo, "--no-optional-locks", "status", "--porcelain", "-uall", "--", ".", *_NOT_WORK)
+        marks = []
+        for line in status.splitlines():
+            path = line[3:].split(" -> ")[-1].strip('"')
+            try:
+                st = (repo / path).stat()
+                marks.append((line, st.st_mtime_ns, st.st_size))
+            except OSError:
+                marks.append((line, None, None))
+        return hashlib.sha256(json.dumps([head, marks]).encode("utf-8", "replace")).hexdigest()
+
+    async def autosave_all(self) -> int:
+        """One round of the periodic save. Returns how many sandboxes were saved. Never raises for a
+        single sandbox. It does not count as use: a sandbox nobody touches still goes idle and is reclaimed."""
+        saved = 0
+        for _idle, d, m in self._live():
+            if not m.get("user"):
+                continue
+            meta = d / "meta.json"
+            try:
+                before = meta.stat()
+            except OSError:
+                continue
+            try:
+                async with self._lock(d.name):
+                    if not meta.is_file():
+                        continue
+                    seen = await self._fingerprint(d / "repo")
+                    if self._seen.get(d.name) == seen:
+                        continue
+                    if await self._save_unlocked(d, only_if_changed=True):
+                        saved += 1
+                    self._seen[d.name] = seen
+                    self._warned.pop(d.name, None)
+            except Exception as exc:
+                problem = str(exc) if isinstance(exc, SaveRefused) else type(exc).__name__
+                if self._warned.get(d.name) != problem:
+                    self._warned[d.name] = problem
+                    logger.warning("[GITCI] periodic save of sandbox %s did not save: %s", d.name, problem[:200])
+            finally:
+                try:  # a save may record ownership in meta.json; that must not look like use
+                    os.utime(meta, ns=(before.st_atime_ns, before.st_mtime_ns))
+                except OSError:
+                    pass
+        return saved
 
     async def _check_space(self, owner: str, key: str, branch: str, data: Dict[str, Any]) -> None:
         """Refuse a save that would take the owner past their branch count or space, after first
@@ -356,6 +538,10 @@ class SandboxManager:
     async def _autosave(self, sandbox_id: str) -> Dict[str, Any]:
         """Save after a change. Never raises: the change itself worked. A failure is returned as a
         warning for the tool result, and the sandbox is not deleted until a save succeeds."""
+        if not (self.root / sandbox_id / "meta.json").is_file():  # closed while this change was running
+            closed = self._burial(sandbox_id)
+            return {"saved": False, "save_warning": self._closed_note(closed) if closed else
+                    "This sandbox was closed while the change was being made, so it is not saved."}
         try:
             await self._save(self.root / sandbox_id)
             return {}
@@ -373,10 +559,24 @@ class SandboxManager:
                 and branch in meta.get("owns", []))
 
     async def _retire(self, user: str, key: str, branch: str) -> None:
-        """One sandbox per user per branch: save and delete the one already on this branch, so the
-        new clone carries on from it instead of two copies of one branch drifting apart."""
-        for _idle, d, m in self._live():
-            if self._holds(m, user, key, branch) and not await self._delete_saving(d):
+        """One session per user per branch. A session resuming a branch takes over the sandbox already
+        on it: that one is saved and closed (and, if its caller uses it again, told why), so the new
+        clone carries on from it instead of two copies of one branch drifting apart. If that sandbox
+        was used a moment ago, someone is working in it right now: the newcomer is refused instead, so
+        neither session loses work in flight and the two cannot take the branch from each other."""
+        for idle, d, m in self._live():
+            if not self._holds(m, user, key, branch):
+                continue
+            wait = self.cfg.takeover_idle_seconds - idle
+            if wait > 0:
+                raise GitCiError(
+                    f"Branch '{branch}' is open in another session of yours (another tab, or an earlier mission "
+                    f"still running): it was used {int(idle)} seconds ago. Two sessions on one branch would "
+                    "overwrite each other's changes, so this one was not started. Do not retry right away and do "
+                    "not clone another copy. Tell the user: finish or close the other session first (its work is "
+                    f"saved as it goes), or ask again in about {int(wait) + 1} seconds, when this session may take "
+                    "the branch over.")
+            if not await self._delete_saving(d, ("taken_over", branch)):
                 raise GitCiError(f"Your open sandbox on '{branch}' could not be saved, so it was kept. "
                                  "Try again in a minute.")
 
@@ -497,7 +697,9 @@ class SandboxManager:
             raise GitCiError(f"There is no saved work on '{branch}' of {key}. list_saved_work shows what there is.")
         for _idle, d, m in self._live():
             if self._holds(m, user, key, branch):
+                self._bury(d.name, "deleted", branch)
                 await asyncio.to_thread(remove_tree, d)
+                self._forget(d.name)
         await self.store.delete(user, key, branch)
         return {"deleted": True, "repo": key, "branch": branch}
 
@@ -559,6 +761,7 @@ class SandboxManager:
         self.check_repo(owner, name)
         if ref:
             check_ref(ref, "ref")
+        self._ensure_autosaver()
         user = self._user(user)
         key = f"{owner}/{name}".lower()
         saved: Optional[Dict[str, Any]] = None
@@ -813,9 +1016,15 @@ class SandboxManager:
         """Delete a sandbox. A signed-in user's unfinished work is saved first and comes back when they
         pass its branch to sandbox_clone; if it cannot be saved, the sandbox is kept. ``discard`` deletes
         it without saving (only when the user says to throw the work away)."""
+        if _SANDBOX_ID.match(sandbox_id or "") and not (self.root / sandbox_id / "meta.json").is_file():
+            closed = self._burial(sandbox_id)
+            if closed and closed.get("reason") == "taken_over":
+                # Cleaning up after itself: nothing to do, and nothing lost (the work went on in the newer session).
+                return {"destroyed": True, "saved": True, "note": self._closed_note(closed)}
         d = self._dir(sandbox_id)
         if discard:
             await asyncio.to_thread(remove_tree, d)
+            self._forget(d.name)
             return {"destroyed": True, "saved": False}
         try:
             saved = await self._save(d)
@@ -825,4 +1034,5 @@ class SandboxManager:
             logger.warning("[GITCI] could not save sandbox %s (%s)", sandbox_id, type(exc).__name__)
             raise GitCiError("The work in this sandbox could not be saved, so it was not deleted. Try again later.")
         await asyncio.to_thread(remove_tree, d)
+        self._forget(d.name)
         return {"destroyed": True, "saved": saved}
