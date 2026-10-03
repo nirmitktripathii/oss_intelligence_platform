@@ -815,3 +815,79 @@ async def test_no_question_back_when_no_tool_calls_remain(llm):
 def test_the_prompt_says_final_ends_the_mission_and_how_to_resume_a_passing_branch():
     assert 'Never use "final" to say what you will do next' in PLANNER_SYSTEM_PROMPT
     assert "If the tests already pass on a resumed branch, the fix is already there" in PLANNER_SYSTEM_PROMPT
+
+
+# -- A server that is asleep ----------------------------------------------- #
+
+
+class SleepySource(FakeGitSource):
+    """Does not answer the first ``misses`` times it is asked for its tools, like a Render instance waking up."""
+
+    def __init__(self, misses: int):
+        super().__init__()
+        self.misses = misses
+        self.asked = 0
+
+    async def list_tools(self) -> List[ToolSpec]:
+        self.asked += 1
+        if self.asked <= self.misses:
+            raise TimeoutError("still waking up")
+        return await super().list_tools()
+
+
+@pytest.mark.asyncio
+async def test_a_server_that_wakes_on_the_second_try_is_in_the_catalog(monkeypatch):
+    monkeypatch.setattr(ToolRegistry, "RETRY_DELAY_SECONDS", 0)
+    source = SleepySource(misses=1)
+
+    tools, unreachable = await ToolRegistry([source]).catalog_with_status()
+
+    assert unreachable == []
+    assert "gitci.run_tests" in {t.name for t in tools}
+    assert source.asked == 2
+
+
+@pytest.mark.asyncio
+async def test_a_server_that_stays_down_is_named_and_asked_only_twice(monkeypatch):
+    monkeypatch.setattr(ToolRegistry, "RETRY_DELAY_SECONDS", 0)
+    down, up = SleepySource(misses=99), FakeSource()
+
+    tools, unreachable = await ToolRegistry([down, up]).catalog_with_status()
+
+    assert unreachable == ["gitci"]
+    assert {t.name for t in tools} == {"demo.search", "demo.open_pr"}  # the others still work
+    assert down.asked == 2
+
+
+@pytest.mark.asyncio
+async def test_asking_for_a_tool_of_a_sleeping_server_explains_instead_of_retrying(monkeypatch, llm):
+    # Seen live: the Git/CI server was asleep, the model kept asking for gitci.run_tests, and the mission
+    # failed with "I couldn't work out how to finish that" after three tries.
+    monkeypatch.setattr(ToolRegistry, "RETRY_DELAY_SECONDS", 0)
+    planner = MissionPlanner(ToolRegistry([SleepySource(misses=99), FakeSource()]), store=MissionStore(), max_steps=5)
+    llm.script += [_tool("gitci.run_tests", sandbox_id="abc123"), _tool("gitci.run_tests", sandbox_id="abc123")]
+
+    mission = await planner.start("continue the fix")
+
+    assert mission.status == MissionStatus.FAILED
+    assert "gitci service isn't answering" in mission.speech and "Try again in a minute" in mission.speech
+    assert len(llm.prompts) == 1  # no second, third try
+    assert "not answering right now: gitci" in llm.prompts[0]
+
+
+@pytest.mark.asyncio
+async def test_the_other_servers_still_work_while_one_sleeps(monkeypatch, llm):
+    monkeypatch.setattr(ToolRegistry, "RETRY_DELAY_SECONDS", 0)
+    source = FakeSource()
+    planner = MissionPlanner(ToolRegistry([SleepySource(misses=99), source]), store=MissionStore(), max_steps=5)
+    llm.script += [_tool("demo.search", query="python"), _final("Found one.")]
+
+    mission = await planner.start("find a python issue")
+
+    assert mission.status == MissionStatus.COMPLETED
+    assert source.calls == [("search", {"query": "python"})]
+
+
+def test_an_email_request_alone_does_not_ask_for_a_telegram_report():
+    assert 'send_report, which goes to Telegram) only when the user asked for a Telegram report' in PLANNER_SYSTEM_PROMPT
+    assert '"email me" or "tell me" alone is not that' in PLANNER_SYSTEM_PROMPT

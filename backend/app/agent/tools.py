@@ -14,11 +14,12 @@ for this, so a newly added or renamed tool can never start running unattended.
 import json
 import logging
 import os
+import asyncio
 import re
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from functools import lru_cache
-from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Protocol
+from typing import Any, Dict, FrozenSet, Iterable, List, Optional, Protocol, Tuple
 from app.config import settings
 
 logger = logging.getLogger("gitscout.agent")
@@ -200,15 +201,33 @@ class ToolRegistry:
     def __init__(self, sources: Iterable[ToolSource]):
         self._sources: Dict[str, ToolSource] = {s.name: s for s in sources}
 
-    async def catalog(self) -> List[ToolSpec]:
-        """All reachable tools. An unreachable server is skipped so the others still work."""
+    # A free Render instance that slept takes 30 to 60 seconds to wake, and the first request is what
+    # wakes it, so one more try a moment later usually finds it up.
+    RETRY_DELAY_SECONDS = 2.0
+
+    async def _list(self, source: ToolSource) -> List[ToolSpec]:
+        try:
+            return await source.list_tools()
+        except Exception as exc:
+            logger.warning("[AGENT] tool source %r did not answer (%r); trying once more", source.name, exc)
+        await asyncio.sleep(self.RETRY_DELAY_SECONDS)
+        return await source.list_tools()
+
+    async def catalog_with_status(self) -> Tuple[List[ToolSpec], List[str]]:
+        """All reachable tools, and the names of the servers that did not answer, even after a retry."""
         tools: List[ToolSpec] = []
+        unreachable: List[str] = []
         for source in self._sources.values():
             try:
-                tools.extend(_hide_server_set(spec) for spec in await source.list_tools())
+                tools.extend(_hide_server_set(spec) for spec in await self._list(source))
             except Exception as exc:
                 logger.warning("[AGENT] tool source %r is unreachable: %r", source.name, exc)
-        return tools
+                unreachable.append(source.name)
+        return tools, unreachable
+
+    async def catalog(self) -> List[ToolSpec]:
+        """All reachable tools. An unreachable server is skipped so the others still work."""
+        return (await self.catalog_with_status())[0]
 
     async def call(self, qualified_name: str, arguments: Dict[str, Any],
                    server_set: Optional[Dict[str, Any]] = None) -> Any:
