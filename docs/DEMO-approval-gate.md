@@ -131,8 +131,17 @@ The hosted agent can only change things if the Git/CI MCP server is deployed and
    tries to prompt-inject the assistant. It never opens a real mailbox. On that service set `MCP_HTTP_TOKEN`
    (32+ characters), `LLM_API_KEY`, and, to allow sending, `EMAIL_SEND_ENABLED=true`, `SMTP_HOST`, `SMTP_USER`,
    `SMTP_PASSWORD`, and add `send_email` to `EMAIL_HTTP_TOOLS`. On `gitscout-api` set `EMAIL_MCP_TOKEN` to the same
-   token and `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` (used for the confirmation code).
-   All are dashboard-only values.
+   token and `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` (used for the
+   confirmation code). All are dashboard-only values.
+
+   **The port matters on Render's free tier.** It blocks outbound SMTP on ports 25, 465 and 587, so a mail
+   server on those ports never answers and the send ends in `SMTPConnectTimeoutError` (the log names the
+   host and port and says the port is blocked). Use the provider's alternate port on both services: Brevo
+   `smtp-relay.brevo.com:2525`, Mailjet `in-v3.mailjet.com:2525`, Resend `smtp.resend.com:2587`, or
+   Amazon SES `email-smtp.<region>.amazonaws.com:2587`. Gmail has no alternate port, so Gmail SMTP only
+   works from a paid instance. For mail that reaches every user's inbox, send from a domain you own with
+   SPF, DKIM and DMARC set up at the provider; Resend and SES only deliver to verified addresses until a
+   domain is verified (Resend) or production access is granted (SES).
 
    How a visitor gets emails: on `/alexa`, signed in, they type an address in **Email me** and press Send code.
    The backend mails a six-digit code to that address (10 minute life, five wrong guesses and it is spent, only
