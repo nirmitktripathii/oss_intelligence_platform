@@ -343,3 +343,10 @@ for the Open Source mini-challenge.
 - **Fix.** The tool list of a server that does not answer is asked for once more after 2 seconds. A server that is still down is named to the model ("not answering right now: gitci"), which is told not to call it. If it asks for one of that server's tools anyway, the mission stops at once with "The gitci service isn't answering. It is probably waking up, which can take up to a minute. Try again in a minute." The other servers keep working.
 - **Telegram.** "Email me a summary" also sent a Telegram report. The prompt now says `send_report` goes to Telegram and is used only when the user asked for Telegram; "email me" or "tell me" alone is not that.
 - Tests: 6 new in `test_agent_planner.py` (a server that wakes on the second try is in the list; one that stays down is named and asked only twice; asking for its tool explains instead of retrying; the other servers still work; an email request alone does not ask for a Telegram report).
+
+## 2026-10-04 (the on-screen answer repeated an earlier one)
+
+- **What the owner saw.** The spoken answer was right, but the on-screen card showed the previous mission's text again.
+- **Cause.** The model is shown the earlier turns of the conversation and sometimes copies one of their on-screen answers instead of writing a new one.
+- **Fix.** The prompt now says the on-screen answer belongs to the current request only. If a "final" arrives whose on-screen answer is word for word (ignoring spaces and letter case) one from an earlier turn, it is sent back once. A second identical one stands, because the user may really have asked the same thing twice.
+- Tests: backend 274 pass, with new tests in `test_agent_planner.py` for the repeat check and the send-back-once rule.
