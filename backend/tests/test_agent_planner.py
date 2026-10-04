@@ -891,3 +891,46 @@ async def test_the_other_servers_still_work_while_one_sleeps(monkeypatch, llm):
 def test_an_email_request_alone_does_not_ask_for_a_telegram_report():
     assert 'send_report, which goes to Telegram) only when the user asked for a Telegram report' in PLANNER_SYSTEM_PROMPT
     assert '"email me" or "tell me" alone is not that' in PLANNER_SYSTEM_PROMPT
+
+
+@pytest.mark.asyncio
+async def test_a_display_copied_from_an_earlier_turn_is_sent_back_once(planner, llm):
+    # Seen live: the speech was right but the on-screen card repeated the previous mission's answer.
+    sid, _ = await planner.store.create_session()
+    llm.script += [_final("Fixed the bug.", "## Fix\nDraft PR #6 is open.")]
+    await planner.start("fix the bug", session_id=sid)
+
+    llm.script += [
+        _final("Nothing new in the inbox.", "## Fix\n  draft pr #6 is open."),
+        _final("Nothing new in the inbox.", "The inbox has no new bug reports."),
+    ]
+    mission = await planner.start("anything new in my inbox", session_id=sid)
+
+    assert mission.display == "The inbox has no new bug reports."
+    assert mission.speech == "Nothing new in the inbox."
+    assert "word for word an answer you already gave" in llm.prompts[-1]
+
+
+@pytest.mark.asyncio
+async def test_a_second_identical_display_stands(planner, llm):
+    sid, _ = await planner.store.create_session()
+    llm.script += [_final("Done.", "Draft PR #6 is open.")]
+    await planner.start("fix the bug", session_id=sid)
+
+    llm.script += [_final("Same as before.", "Draft PR #6 is open."), _final("Same as before.", "Draft PR #6 is open.")]
+    mission = await planner.start("what is open", session_id=sid)
+
+    assert mission.display == "Draft PR #6 is open."
+    assert len(llm.prompts) == 3  # one question back, not a loop
+
+
+@pytest.mark.asyncio
+async def test_a_first_display_is_never_questioned(planner, llm):
+    llm.script += [_final("Done.", "Draft PR #6 is open.")]
+    mission = await planner.start("fix the bug")
+    assert mission.display == "Draft PR #6 is open."
+    assert len(llm.prompts) == 1
+
+
+def test_the_prompt_says_display_is_for_this_request_only():
+    assert "never by copying an earlier answer" in PLANNER_SYSTEM_PROMPT
