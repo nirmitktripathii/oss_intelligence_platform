@@ -1,109 +1,98 @@
 <div align="center">
 
-# 🛰️ GitScout / OSS Terminal
-### *The Bloomberg Terminal for Open-Source Developers & Maintainers*
+# Developer Mission Control
+
+### A contributor's agent that defers to the maintainer.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![FastAPI: 0.111+](https://img.shields.io/badge/FastAPI-0.111%2B-009688.svg?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Next.js: 14 App Router](https://img.shields.io/badge/Next.js-14_App_Router-black.svg?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org)
 [![Docker: Ready](https://img.shields.io/badge/Docker-Multi--Stage_Build-2496ED.svg?style=for-the-badge&logo=docker&logoColor=white)](Dockerfile)
-[![Zero-Mock: Verified](https://img.shields.io/badge/Open--Source_Integrity-100%25_Live_Data-success.svg?style=for-the-badge)](tests/e2e/test_audit_integrity.py)
-[![Tests: 100% Passing](https://img.shields.io/badge/Test_Suite-100%25_Passing-brightgreen.svg?style=for-the-badge)](backend/tests/)
-
-<p align="center">
-  <b>Real-Time Issue & Bounty Stream</b> • 
-  <b>AST Code Localization</b> • 
-  <b>Minimal Reproduction Generators</b> • 
-  <b>Hourly ROI Estimator</b> • 
-  <b>Multi-Channel Dispatcher</b> • 
-  <b>Graphify AST Knowledge Graph</b>
-</p>
 
 </div>
+
+Open-source maintainers are drowning in unreviewed, AI-generated pull requests. This project is
+built as the opposite of that. It helps a *person* find an issue, understand it, and contribute a
+reviewed fix, and it stops wherever the project does not want AI-assisted work.
+
+**Consent first.** Before any work, the agent reads the project's CONTRIBUTING file and PR template.
+If the project bans or restricts AI-assisted contributions, the agent refuses to clone it, quotes the
+rule, and leaves the decision to you. If the project asks for disclosure, or says nothing, the draft
+PR says that an AI assistant helped prepare it and that the author reviewed and ran it.
+
+**A human approves every write.** Reading is automatic. Cloning, editing, running tests, committing,
+opening a pull request and sending email each pause for your approval, one step at a time. You see
+the exact diff before you say yes. Only the signed-in owner of the conversation can approve.
+
+**Proof, not volume.** Tests run before and after the change. A pull request is opened only if they
+pass, only as a draft, and never against the base branch. Work happens in a throwaway sandbox of the
+repository.
+
+**You stay the author.** Ask for a terminal instead of a fix and you get a sandbox where *you* do the
+work; the assistant explains the issue and gives hints, not the finished answer.
 
 ---
 
 ## 📖 Table of Contents
 
-1. [Executive Summary & Product Vision](#-executive-summary--product-vision)
-2. [The Bloomberg Terminal Positioning](#-the-bloomberg-terminal-positioning)
-3. [Architecture & System Design](#-architecture--system-design)
-4. [Curated 6-Domain Ecosystem Matrix](#-curated-6-domain-ecosystem-matrix)
-5. [Turnkey 1-Command Quickstart](#-turnkey-1-command-quickstart)
-6. [Complete REST API Reference](#-complete-rest-api-reference)
-7. [Multi-Channel Notification Dispatcher](#-multi-channel-notification-dispatcher)
-8. [Micro-SaaS Monetization & Webhook Engine](#-micro-saas-monetization--webhook-engine)
-9. [Graphify AST Knowledge Graph Navigation](#-graphify-ast-knowledge-graph-navigation)
-10. [Zero-Cost Cloud Deployment Topology](#-zero-cost-cloud-deployment-topology)
-11. [Automated Verification & Test Suite](#-automated-verification--test-suite)
-12. [Contributing & Code of Conduct](#-contributing--code-of-conduct)
-13. [License](#-license)
+1. [How it works](#how-it-works)
+2. [What it will not do](#what-it-will-not-do)
+3. [Status](#status)
+4. [Architecture & System Design](#-architecture--system-design)
+5. [Curated 6-Domain Ecosystem Matrix](#-curated-6-domain-ecosystem-matrix)
+6. [Quickstart](#-turnkey-1-command-quickstart)
+7. [REST API Reference](#-complete-rest-api-reference)
+8. [Graphify AST Knowledge Graph Navigation](#-graphify-ast-knowledge-graph-navigation)
+9. [Deployment Topology](#-zero-cost-cloud-deployment-topology)
+10. [Automated Verification & Test Suite](#-automated-verification--test-suite)
+11. [Contributing & Code of Conduct](#-contributing--code-of-conduct)
+12. [License](#-license)
 
 ---
 
-## 🚀 Executive Summary & Product Vision
+## How it works
 
-**GitScout (OSS Terminal)** is a high-throughput, real-time intelligence platform designed to eliminate the friction in open-source software contributions. While legacy aggregators present static lists of stale tags and raw bounty boards lack code context, GitScout delivers **actionable contribution intelligence**:
+You speak or type to an Alexa+-style client. An agent planner turns the request into tool calls over
+the Model Context Protocol (Streamable HTTP, spec 2025-11-25):
 
-- **100% Live Open-Source Stream**: Continuously harvests live, open, and unassigned issues across 36 high-velocity repositories in 6 core ecosystems (AI/ML, Data, Web, Cloud, Security, Systems) with **zero synthetic mock data**.
-- **AST-Driven File Localization**: Automatically pinpoints exact candidate source files and functions from stack traces and error messages with confidence scores.
-- **Minimal Bug Reproduction Generator**: Generates standalone, copy-pasteable reproduction scripts and test cases for reported bugs in seconds.
-- **Actionable Fix Blueprints**: Synthesizes 4-step execution checklists aligned with each project's `CONTRIBUTING.md` standards.
-- **Bounty & Hourly ROI Engine**: Aggregates funded bounties from Polar.sh, Algora, and GitHub Sponsors, calculating real-time Effort-to-Bounty Hourly ROI (`$/hr`).
-- **Sub-Second Multi-Channel Alerts**: Instant push notifications via Telegram Bot (inline action buttons), Discord Webhooks (rich embeds), Transactional Email (Resend API), and WhatsApp Pro (Twilio).
-- **Multi-Theme Terminal Dashboard**: Modern Next.js 14 App Router UI with seamless Dark, Light, and System theme switching, faceted multi-filtering, and an interactive slide-out Issue Workbench drawer.
+- **GitScout MCP**: finds and explains open issues.
+- **Git/CI MCP**: sandboxed clone, read, edit, test, commit, draft PR, CI status. Token-protected and
+  pinned to a throwaway repository.
+- **Email MCP**: reads a demo inbox; each send is its own approval, to your confirmed address only.
 
----
+An approval gate sits in front of every write, and sign-in sits in front of the gate.
 
-## 📈 The Bloomberg Terminal Positioning
+## What it will not do
 
-Financial traders rely on Bloomberg Terminals to transform raw market noise into high-frequency alpha. GitScout applies the exact same structural paradigm to open-source software engineering:
+- Work on a project that says it does not accept AI-assisted contributions.
+- Open a pull request whose tests fail, or a non-draft pull request.
+- Act without your approval, or approve in bulk.
+- Rank issues by payout or optimise for bounties.
 
-```mermaid
-flowchart LR
-    subgraph Financial_Market["Traditional Financial Terminal"]
-        M1["Live Stock & Forex Ticker"]
-        M2["P/E Ratios & Valuation Multiples"]
-        M3["Analyst Equity Research Reports"]
-        M4["Order Book Bid/Ask Depth"]
-        M5["High-Frequency Price Alerts"]
-    end
+## Status
 
-    subgraph GitScout_Terminal["GitScout OSS Terminal"]
-        G1["Real-Time Live Issue & Bounty Stream"]
-        G2["Effort-to-Bounty Hourly ROI ($/hr)"]
-        G3["AI AST Localization & Fix Blueprints"]
-        G4["Active Contributor & PR Competition Tracker"]
-        G5["Multi-Channel Sub-Second Push Alerts"]
-    end
-
-    M1 -.->|Mapped to| G1
-    M2 -.->|Mapped to| G2
-    M3 -.->|Mapped to| G3
-    M4 -.->|Mapped to| G4
-    M5 -.->|Mapped to| G5
-```
-
-| Financial Terminal Metric | GitScout OSS Terminal Equivalent | Developer Value Proposition |
-| :--- | :--- | :--- |
-| **Live Asset Ticker** | **Real-Time Issue Stream** | Discover newly opened, high-impact issues before competing developers claim them. |
-| **P/E Ratio & Valuation** | **Hourly ROI Score (`$/hr`)** | Quantifies financial return on developer time (e.g. `$250 bounty / 2h est. = $125/hr`). |
-| **Analyst Research Report** | **AST File Localization & Fix Plan** | Compresses codebase exploration and onboarding from 3 hours to 3 minutes. |
-| **Order Book Depth** | **PR & Assignee State Filter** | Strictly verifies unassigned status (`assignee is None`, `state == 'open'`) to prevent wasted work. |
-| **Market Volatility Alerts** | **Telegram / Discord Instant Alerts** | Receive immediate push pings matched to your exact language and tech stack preferences. |
+| Capability | State |
+| :--- | :--- |
+| Approval gate on every write; only the signed-in owner can approve | Live |
+| Draft PRs only; base branch never pushed; diff shown before approval | Live |
+| Tests run first; a PR is opened only if they pass | Live |
+| Saved work per branch; email summary to your confirmed address | Live |
+| Reading the project's AI policy; refusing banned projects; PR disclosure line | In review, not yet deployed |
+| Sandbox terminal where you do the work | Infrastructure deployed to AWS; no launch proven, no browser terminal yet |
+| Duplicate-work / competing-PR check before starting | Not built |
+| Amazon Bedrock (Nova) reasoning | Blocked by an account restriction; Gemini is used meanwhile |
 
 ---
 
 ## 🏗️ Architecture & System Design
 
-GitScout is built on a clean, decoupled asynchronous microservices architecture optimized for sub-millisecond query performance and zero-cost cloud deployment:
+GitScout, the issue-intelligence service behind Mission Control, is a decoupled asynchronous service built for low-cost cloud deployment:
 
 ```mermaid
 flowchart TD
     subgraph Ingestion["Ingestion & Scraping Engine"]
         GH["GitHub REST & GraphQL API"] -->|ETag Polling / 36 Repos| SCRAPER["Live Scraper Orchestrator"]
-        BOUNTY["Polar.sh / Algora / GitHub Sponsors"] -->|Regex & Label Extractor| SCRAPER
         SCRAPER --> DB[("Neon Serverless Postgres / SQLite")]
         SCRAPER --> CACHE[("Upstash Redis Cache")]
     end
@@ -120,15 +109,6 @@ flowchart TD
     subgraph Backend["FastAPI Backend Service (Port 8000)"]
         DB --> API["FastAPI REST API v1"]
         CACHE --> API
-        API --> DISPATCH["Multi-Channel Dispatcher"]
-        API --> BILLING["Dodo Payments & Lemon Squeezy Engine"]
-    end
-
-    subgraph Channels["Alert Channels"]
-        DISPATCH -->|Bot API| TG["Telegram"]
-        DISPATCH -->|Rich Embeds| DC["Discord"]
-        DISPATCH -->|Transactional API| EM["Resend Email"]
-        DISPATCH -->|Twilio API| WA["WhatsApp Pro"]
     end
 
     subgraph Frontend["Next.js 14 Dashboard (Port 3000)"]
@@ -136,7 +116,6 @@ flowchart TD
         SWR --> THEME["Theme Engine: Dark / Light / System"]
         THEME --> EXPLORER["Faceted Issue Explorer"]
         THEME --> DRAWER["AI Workbench Slide-out Drawer"]
-        THEME --> ROI["Hourly ROI Calculator"]
         THEME --> GRAPH["Graphify AST Knowledge Graph"]
     end
 ```
@@ -267,7 +246,7 @@ GET /api/v1/health
 
 ### 2. List & Search Issues
 ```http
-GET /api/v1/issues?domain=ai_ml&difficulty=Medium&has_bounty=true&sort_by=hourly_roi&page=1&page_size=10
+GET /api/v1/issues?domain=ai_ml&difficulty=Medium&sort_by=newest&page=1&page_size=10
 ```
 **Query Parameters:**
 | Parameter | Type | Description |
@@ -275,10 +254,8 @@ GET /api/v1/issues?domain=ai_ml&difficulty=Medium&has_bounty=true&sort_by=hourly
 | `domain` | `string` | Filter by domain: `ai_ml`, `data_engineering`, `web_frontend`, `cloud_devops`, `cybersecurity`, `systems` |
 | `difficulty` | `string` | Filter by difficulty: `Easy`, `Medium`, `Hard` |
 | `tech_stack` | `string` | Filter by keyword in stack tags (e.g. `Python`, `React`, `Rust`) |
-| `has_bounty` | `boolean` | Filter issues with funded bounties (`true` / `false`) |
-| `min_bounty` | `float` | Minimum bounty amount in USD (e.g. `100.0`) |
 | `search` | `string` | Free-text keyword search across titles, descriptions, and repositories |
-| `sort_by` | `string` | `newest`, `oldest`, `hourly_roi`, `bounty_desc`, `comments` |
+| `sort_by` | `string` | `newest`, `oldest`, `comments` |
 | `page` | `integer` | Page number (default: `1`) |
 | `page_size` | `integer` | Items per page (default: `20`, max: `100`) |
 
@@ -299,11 +276,6 @@ GET /api/v1/issues?domain=ai_ml&difficulty=Medium&has_bounty=true&sort_by=hourly
       "tech_stack": ["Python", "CUDA", "C++", "PyTorch"],
       "difficulty": "Medium",
       "estimated_hours": 3.0,
-      "has_bounty": true,
-      "bounty_amount_usd": 350.0,
-      "bounty_source": "Polar.sh",
-      "bounty_url": "https://polar.sh/vllm-project/vllm/issues/7890",
-      "hourly_roi": 116.67,
       "comments_count": 4,
       "github_created_at": "2026-08-28T14:20:00Z",
       "github_updated_at": "2026-08-29T09:15:00Z"
@@ -378,185 +350,6 @@ GET /api/v1/triage/vllm-project/vllm#7890
 
 ---
 
-### 4. Funded Bounties & Hourly ROI Leaderboard
-```http
-GET /api/v1/bounties?min_amount=100&sort_by=hourly_roi&limit=10
-```
-**Response (200 OK):**
-```json
-{
-  "items": [
-    {
-      "issue_id": "langchain-ai/langchain#11223",
-      "repo_owner": "langchain-ai",
-      "repo_name": "langchain",
-      "issue_number": 11223,
-      "title": "Add streaming token callback handler for OpenSearch vectorstore",
-      "html_url": "https://github.com/langchain-ai/langchain/issues/11223",
-      "domain": "ai_ml",
-      "tech_stack": ["Python", "OpenSearch", "AsyncIO"],
-      "difficulty": "Easy",
-      "estimated_hours": 1.5,
-      "bounty_amount_usd": 300.0,
-      "bounty_source": "Algora",
-      "bounty_url": "https://algora.io/bounties/11223",
-      "hourly_roi": 200.0,
-      "github_created_at": "2026-08-29T08:00:00Z"
-    }
-  ],
-  "total": 12,
-  "total_bounty_usd": 3850.0,
-  "average_hourly_roi": 134.50
-}
-```
-
----
-
-### 5. Multi-Channel Notification Subscriptions
-```http
-POST /api/v1/notifications/subscribe
-Content-Type: application/json
-
-{
-  "channel": "telegram",
-  "destination": "@my_dev_channel",
-  "domains": ["ai_ml", "systems"],
-  "min_bounty": 100.0,
-  "difficulty": "Medium",
-  "tech_stacks": ["Python", "Rust"]
-}
-```
-**Response (201 Created):**
-```json
-{
-  "id": 1,
-  "channel": "telegram",
-  "destination": "@my_dev_channel",
-  "domains": ["ai_ml", "systems"],
-  "min_bounty": 100.0,
-  "difficulty": "Medium",
-  "tech_stacks": ["Python", "Rust"],
-  "is_active": true,
-  "created_at": "2026-08-29T11:00:00Z"
-}
-```
-
----
-
-### 6. Billing & Checkout Initiation
-```http
-POST /api/v1/billing/checkout
-Content-Type: application/json
-
-{
-  "plan_id": "pro_monthly",
-  "customer_email": "dev@example.com",
-  "provider": "dodo",
-  "success_url": "http://localhost:3000/dashboard?status=success",
-  "cancel_url": "http://localhost:3000/pricing?status=cancelled"
-}
-```
-**Response (200 OK):**
-```json
-{
-  "checkout_url": "https://test.dodopayments.com/buy/sub_dodo_12345678",
-  "session_id": "cs_dodo_987654321",
-  "provider": "dodo",
-  "plan_id": "pro_monthly",
-  "customer_email": "dev@example.com"
-}
-```
-
----
-
-## 🔔 Multi-Channel Notification Dispatcher
-
-GitScout features a pluggable asynchronous multi-channel notification engine supporting 4 real-time dispatch protocols:
-
-```mermaid
-flowchart LR
-    Event[New Live Issue / Funded Bounty] --> Router[Notification Router]
-    Router -->|Filter: Domain, Min Bounty, Stack| Filter[Subscriber Filter]
-    Filter --> TG[Telegram Bot API]
-    Filter --> DC[Discord Webhook]
-    Filter --> EM[Resend Transactional Email]
-    Filter --> WA[Twilio WhatsApp Pro]
-```
-
-> **Status.** The adapters, subscriptions and matching rules are implemented and tested, and the
-> test-message endpoint sends for real when a channel has credentials. Nothing yet calls the router
-> when a new issue is indexed, so alerts are not broadcast automatically. Sending a test message, and
-> listing or removing subscriptions, need a signed-in account; subscribing is open but rate limited
-> and every destination is validated for its channel. A channel without credentials answers
-> `not_configured` instead of claiming delivery. The agent's own Telegram report (`send_report` on the
-> Git/CI server) is separate: each signed-in user links their own Telegram chat on `/alexa` and gets
-> their own reports (see `docs/DEMO-approval-gate.md`). Likewise `send_email` (Email Orchestrator, demo
-> mailbox) goes only to an address the signed-in user confirmed with an emailed code, after an approval.
-
-### 1. Telegram Bot Integration
-- **Interactive Inline Buttons**: Every Telegram alert includes direct callback buttons: `[🚀 View in GitScout]`, `[🔍 AI Fix Plan]`, and `[💰 Claim Bounty]`.
-- **Setup**:
-  1. Create a bot with `@BotFather` to obtain a `TELEGRAM_BOT_TOKEN`.
-  2. Add your bot to a channel or query your chat ID with `@userinfobot`.
-  3. Configure `.env`:
-     ```env
-     TELEGRAM_BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
-     TELEGRAM_CHAT_ID="@your_channel_or_chat_id"
-     ```
-
-### 2. Discord Webhooks
-- **Rich Embed Cards**: Dispatches styled Discord embed cards with color-coded difficulty indicators (`#22C55E` for Easy, `#F59E0B` for Medium, `#EF4444` for Hard) and Hourly ROI badges.
-- **Setup**:
-  1. In Discord Server Settings -> Integrations -> Webhooks, create a Webhook and copy the URL.
-  2. Configure `.env`:
-     ```env
-     DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/123456789/abcdefghijklmnopqrstuvwxyz"
-     ```
-
-### 3. Transactional Email (Resend API)
-- **Modern HTML Digest**: Delivers responsive HTML emails with 1-click unsubscribe links and direct GitHub issue deep links.
-- **Setup**:
-  1. Sign up at [https://resend.com](https://resend.com) and generate an API key.
-  2. Configure `.env`:
-     ```env
-     RESEND_API_KEY="re_123456789_abcdef"
-     RESEND_FROM_EMAIL="alerts@gitscout.dev"
-     ```
-
-### 4. Twilio WhatsApp Pro
-- **Instant Mobile Push**: Real-time WhatsApp template alerts for urgent high-value bounties (`$500+`).
-- **Setup**:
-  ```env
-  TWILIO_ACCOUNT_SID="AC1234567890abcdef"
-  TWILIO_AUTH_TOKEN="your_auth_token"
-  TWILIO_WHATSAPP_NUMBER="whatsapp:+14155238886"
-  ```
-
----
-
-## 💰 Micro-SaaS Monetization & Webhook Engine
-
-GitScout includes an enterprise-grade dual-gateway monetization architecture supporting **Dodo Payments** (primary global Merchant of Record with UPI, Cards, and Crypto support) and **Lemon Squeezy** (alternative MoR).
-
-### Subscription Tier Architecture
-
-| Feature | Free ($0/mo) | Pro Monthly ($19/mo) | Pro Annual ($149/yr) | Team ($49/mo) |
-| :--- | :---: | :---: | :---: | :---: |
-| **Live Issue Catalog** | Unlimited | Unlimited | Unlimited | Unlimited |
-| **AI Triage & AST Localizations** | 5 / day | **Unlimited** | **Unlimited** | **Unlimited** |
-| **Minimal Bug Repro Scripts** | Basic | **Full Script & Sandbox** | **Full Script & Sandbox** | **Full Script & Sandbox** |
-| **Hourly ROI Calculator** | ❌ | **✅ Included** | **✅ Included** | **✅ Included** |
-| **Instant Multi-Channel Alerts** | Weekly Digest | **Sub-Second Real-Time** | **Sub-Second Real-Time** | **Sub-Second Real-Time** |
-| **Graphify Knowledge Graph Route** | Basic Graph | **Full Interactive AST** | **Full Interactive AST** | **Full Interactive AST** |
-| **Team Repository Monitoring** | ❌ | ❌ | ❌ | **5 Monitored Repos** |
-
-### Webhook Security & Idempotency
-- **HMAC-SHA256 Signature Verification**: Validates all incoming payloads using `x-dodo-signature` or `x-signature` headers.
-- **Idempotency Key Tracking**: Deduplicates webhook deliveries to prevent replay attacks and double billing.
-- **State Machine Transitions**: Handles `subscription.active`, `subscription.cancelled`, `subscription.renewed`, and `payment.failed`.
-
----
-
 ## 🕸️ Graphify AST Knowledge Graph Navigation
 
 GitScout embeds a structural **Graphify Knowledge Graph** mapping AST relationships, import hierarchies, and codebase dependencies across indexed open-source repositories:
@@ -569,7 +362,7 @@ GitScout embeds a structural **Graphify Knowledge Graph** mapping AST relationsh
 
 ## ☁️ Zero-Cost Cloud Deployment Topology
 
-GitScout is engineered for complete **$0/month initial operating cost**:
+GitScout runs on free tiers of managed services:
 
 ```mermaid
 graph TD
@@ -577,8 +370,6 @@ graph TD
     Vercel -->|API Reverse Proxy /api/v1/*| Backend[Render / Fly.io Container\nFastAPI Backend Service]
     Backend -->|Pooled SQL Port 5432| Neon[(Neon Serverless PostgreSQL\n0.5 GB Free Tier)]
     Backend -->|REST / TCP| Upstash[(Upstash Serverless Redis\n10k cmd/day Free Tier)]
-    Backend -->|Outbound Webhooks| AlertServices[Telegram / Discord / Resend]
-    PayGateways[Dodo Payments / Lemon Squeezy] -->|Inbound Webhooks| Backend
 ```
 
 ### Deployment Configuration Blueprint Index
@@ -605,7 +396,7 @@ pytest -v
 # 2. Run comprehensive 4-tier E2E test runner
 python tests/run_e2e.py --all --verbose
 
-# 3. Run zero-mock forensic integrity audit
+# 3. Run the data-integrity audit
 pytest tests/e2e/test_audit_integrity.py -v
 
 # 4. Verify Next.js frontend type safety & production build
@@ -613,7 +404,7 @@ cd frontend && npm run build
 ```
 
 ### Quality Guarantees
-- **Zero Mock Fallbacks**: 100% of indexed issues resolve to verified live GitHub repositories.
+- **Live data**: indexed issues come from the GitHub API, not synthetic fixtures.
 - **Encoding Safety**: Windows PowerShell/CMD safe output using ASCII markers (`[OK]`, `[ERROR]`, `[+]`, `[!]`).
 - **OWASP Compliance**: Automated security header validation (HSTS, CSP, X-Frame-Options, X-Content-Type-Options).
 
@@ -621,7 +412,9 @@ cd frontend && npm run build
 
 ## 🤝 Contributing & Code of Conduct
 
-We welcome contributions from developers worldwide! To contribute:
+We welcome contributions. If an AI assistant helped you write a change, say so in the pull request, and make sure you have read, run and can explain every line.
+
+To contribute:
 
 1. **Fork the repository** and create a feature branch:
    ```bash
@@ -650,5 +443,5 @@ Please review our [Code of Conduct](CODE_OF_CONDUCT.md) to ensure an inclusive a
 Distributed under the **MIT License**. See `LICENSE` for more information.
 
 <div align="center">
-  <sub>Built with ❤️ by the GitScout Core Engineering Team. Designed for the global open-source community.</sub>
+  <sub>Built for the AWS Hackathon, Alexa+ track.</sub>
 </div>
