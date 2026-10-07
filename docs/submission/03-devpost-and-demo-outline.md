@@ -27,7 +27,7 @@ work and the assistant explains and hints.
   (sandboxed execution) and Email (demo mailbox).
 - Per-user GitHub sign-in; only the conversation's owner can approve a change.
 - AWS: say exactly what is used on the day. Bedrock is blocked on this account
-  the account restriction), so describe the integration and the evidence honestly. If the Fargate sandbox
+  by an account restriction, so describe the integration and the evidence honestly. If the Fargate sandbox
   terminal is proven by then, include it.
 
 ## Devpost: challenges
